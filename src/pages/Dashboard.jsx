@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function Home() {
+export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalKisaans: 0,
@@ -21,59 +21,69 @@ export default function Home() {
   async function fetchDashboardData() {
     setLoading(true);
 
-    // 1. Kisaans Count
-    const { data: kisaans } = await supabase.from('kisaans').select('id');
-    
-    // 2. Tijori Data
-    const { data: tijori } = await supabase.from('tijori_cash').select('*');
-    const tIn = tijori?.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
-    const tOut = tijori?.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
+    try {
+      // 1. Kisaans Count
+      const { data: kisaans, error: kisaanErr } = await supabase.from('kisaans').select('id');
+      if (kisaanErr) console.error("Kisaan Fetch Error:", kisaanErr);
 
-    // 3. Godaam In Stock Data
-    const { data: godaam } = await supabase.from('godaam_stock').select('*');
-    
-    // 4. Kisaan Issued Items Data
-    const { data: kisaanEntries } = await supabase.from('kisaan_entries').select('*');
+      // 2. Tijori Data
+      const { data: tijori, error: tijoriErr } = await supabase.from('tijori_cash').select('*');
+      if (tijoriErr) console.error("Tijori Fetch Error:", tijoriErr);
 
-    // Group items for breakdown (DAP, Urea, Spray, etc.)
-    const itemMap = {};
+      const tIn = tijori?.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
+      const tOut = tijori?.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
 
-    // Calculate Stock In
-    godaam?.forEach(g => {
-      const name = g.item_name.trim();
-      if (!itemMap[name]) {
-        itemMap[name] = { total_in: 0, issued: 0, unit: g.unit || 'Bori' };
-      }
-      itemMap[name].total_in += Number(g.quantity_in || 0);
-    });
+      // 3. Godaam Stock Data
+      const { data: godaam, error: godaamErr } = await supabase.from('godaam_stock').select('*');
+      if (godaamErr) console.error("Godaam Fetch Error:", godaamErr);
 
-    // Calculate Issued to Kisaans
-    kisaanEntries?.forEach(k => {
-      const name = k.item_name.trim();
-      if (itemMap[name]) {
-        itemMap[name].issued += Number(k.amount || 0);
-      } else {
-        itemMap[name] = { total_in: 0, issued: Number(k.amount || 0), unit: 'Item' };
-      }
-    });
+      // 4. Kisaan Issued Entries Data
+      const { data: kisaanEntries, error: entriesErr } = await supabase.from('kisaan_entries').select('*');
+      if (entriesErr) console.error("Kisaan Entries Fetch Error:", entriesErr);
 
-    // Format Stock Array
-    const summaryList = Object.keys(itemMap).map(itemName => ({
-      name: itemName,
-      total_in: itemMap[itemName].total_in,
-      issued: itemMap[itemName].issued,
-      remaining: itemMap[itemName].total_in - itemMap[itemName].issued,
-      unit: itemMap[itemName].unit
-    }));
+      // Group items breakdown safely
+      const itemMap = {};
 
-    setStats({
-      totalKisaans: kisaans?.length || 0,
-      tijoriIn: tIn,
-      tijoriOut: tOut,
-    });
+      // Safe Stock In
+      godaam?.forEach(g => {
+        const name = g.item_name ? g.item_name.toString().trim() : 'Unassigned Item';
+        if (!itemMap[name]) {
+          itemMap[name] = { total_in: 0, issued: 0, unit: g.unit || 'Bori' };
+        }
+        itemMap[name].total_in += Number(g.quantity_in || 0);
+      });
 
-    setStockSummary(summaryList);
-    setLoading(false);
+      // Safe Issued Stock
+      kisaanEntries?.forEach(k => {
+        const name = k.item_name ? k.item_name.toString().trim() : 'Unassigned Item';
+        if (itemMap[name]) {
+          itemMap[name].issued += Number(k.amount || 0);
+        } else {
+          itemMap[name] = { total_in: 0, issued: Number(k.amount || 0), unit: k.unit || 'Item' };
+        }
+      });
+
+      // Format Stock Array
+      const summaryList = Object.keys(itemMap).map(itemName => ({
+        name: itemName,
+        total_in: itemMap[itemName].total_in,
+        issued: itemMap[itemName].issued,
+        remaining: itemMap[itemName].total_in - itemMap[itemName].issued,
+        unit: itemMap[itemName].unit
+      }));
+
+      setStats({
+        totalKisaans: kisaans?.length || 0,
+        tijoriIn: tIn,
+        tijoriOut: tOut,
+      });
+
+      setStockSummary(summaryList);
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -84,7 +94,7 @@ export default function Home() {
         <p className="text-xs text-stone-500">Aap ki zameendari ka mukammal khulasa</p>
       </div>
 
-      {/* Top 3 Quick Stats */}
+      {/* Top Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
           <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">🌾 Total Kisaan</p>
@@ -122,7 +132,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Interactive Khaad & Godaam Summary Card */}
+      {/* Khaad & Godaam Summary Card */}
       <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm space-y-3">
         <div 
           onClick={() => setOpenStockDetail(!openStockDetail)}
@@ -141,7 +151,6 @@ export default function Home() {
           </span>
         </div>
 
-        {/* Accordion / Expandable Breakdown Details */}
         {openStockDetail && (
           <div className="pt-2 space-y-2 border-t border-stone-100 transition-all">
             {loading ? (
