@@ -2,98 +2,164 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function Zameendar() {
-  const [expenses, setExpenses] = useState([]);
-  const [kisaanCount, setKisaanCount] = useState(0);
-  const [form, setForm] = useState({ category: '', amount: '', notes: '' });
+  const [kisaans, setKisaans] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [form, setForm] = useState({ name: '', phone: '', area: '', notes: '' });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchKisaans(); }, []);
 
-  async function fetchData() {
-    const { data: kData } = await supabase.from('kisaans').select('id');
-    if (kData) setKisaanCount(kData.length);
+  async function fetchKisaans() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('kisaans')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    const { data: eData } = await supabase.from('zameendar_expenses').select('*').order('created_at', { ascending: false });
-    setExpenses(eData || []);
+    if (error) console.error("Error fetching kisaans:", error);
+    setKisaans(data || []);
+    setLoading(false);
   }
 
-  async function handleAddExpense(e) {
+  async function handleSaveKisaan(e) {
     e.preventDefault();
-    if (!form.category || !form.amount) return alert("Category aur Amount zaroori hai");
+    if (!form.name) return alert("Zameendar / Kisaan ka naam likhna zaroori hai");
 
-    const { error } = await supabase.from('zameendar_expenses').insert([{
-      category: form.category,
-      amount: parseFloat(form.amount),
-      notes: form.notes
-    }]);
+    const payload = {
+      name: form.name,
+      phone: form.phone || '',
+      area: form.area || '',
+      notes: form.notes || ''
+    };
 
-    if (!error) {
-      setForm({ category: '', amount: '', notes: '' });
-      fetchData();
+    if (editingId) {
+      // Edit Kisaan Entry
+      const { error } = await supabase.from('kisaans').update(payload).eq('id', editingId);
+      if (!error) {
+        setEditingId(null);
+        resetForm();
+        fetchKisaans();
+      } else {
+        alert("Error updating: " + error.message);
+      }
+    } else {
+      // Add New Kisaan Entry
+      const { error } = await supabase.from('kisaans').insert([payload]);
+      if (!error) {
+        resetForm();
+        fetchKisaans();
+      } else {
+        alert("Error adding: " + error.message);
+      }
     }
   }
 
-  const totalZameendarKharch = expenses.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+  function resetForm() {
+    setForm({ name: '', phone: '', area: '', notes: '' });
+  }
+
+  function handleEdit(kisaan) {
+    setEditingId(kisaan.id);
+    setForm({
+      name: kisaan.name || '',
+      phone: kisaan.phone || '',
+      area: kisaan.area || '',
+      notes: kisaan.notes || ''
+    });
+  }
+
+  async function handleDelete(id) {
+    if (window.confirm("Kya aap is Zameendar/Kisaan ko delete karna chahte hain?")) {
+      const { error } = await supabase.from('kisaans').delete().eq('id', id);
+      if (!error) fetchKisaans();
+      else alert("Error deleting: " + error.message);
+    }
+  }
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      <div className="bg-[#1e3a29] text-white p-4 rounded-xl shadow-md">
-        <span className="text-[10px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded">Zameendar Control Board</span>
-        <h2 className="text-xl font-bold mt-1">Zameendari Overview</h2>
-        <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-emerald-800 text-xs">
-          <div>
-            <p className="text-emerald-200">Kul Kashtkaar</p>
-            <p className="text-lg font-bold text-white">{kisaanCount} Kisaan</p>
-          </div>
-          <div>
-            <p className="text-emerald-200">Personal Kharch</p>
-            <p className="text-lg font-bold text-amber-300">Rs {totalZameendarKharch.toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
+      <h2 className="text-xl font-serif font-bold text-[#1e3a29]">Zameendar / Kisaan List 🚜</h2>
 
-      {/* Add Direct Zameendar Expense */}
-      <form onSubmit={handleAddExpense} className="bg-white p-4 rounded-xl border border-stone-200 space-y-3 shadow-sm">
-        <h3 className="font-bold text-xs text-[#1e3a29]">Zameendar Level Kharch (Tubewell / Bijli / Fuel)</h3>
+      {/* Form */}
+      <form onSubmit={handleSaveKisaan} className="bg-white p-4 rounded-xl border border-stone-200 space-y-3 shadow-sm">
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-xs text-[#1e3a29]">
+            {editingId ? '✍️ Zameendar Edit Karein' : '➕ Naya Zameendar Add Karein'}
+          </h3>
+          {editingId && (
+            <button type="button" onClick={() => { setEditingId(null); resetForm(); }} className="text-[10px] text-rose-600 font-bold">
+              Cancel Edit
+            </button>
+          )}
+        </div>
+
         <input 
           type="text" 
-          placeholder="Kharch Ki Qism (e.g. Bijli Bill / Diesel Tanki)" 
-          value={form.category} 
-          onChange={e => setForm({ ...form, category: e.target.value })} 
+          placeholder="Zameendar / Kisaan Name *" 
+          value={form.name} 
+          onChange={e => setForm({...form, name: e.target.value})} 
           required 
-          className="w-full p-2 text-xs border rounded" 
+          className="w-full p-2.5 text-xs border rounded-lg focus:outline-none" 
         />
-        <input 
-          type="number" 
-          placeholder="Raqam (Rs)" 
-          value={form.amount} 
-          onChange={e => setForm({ ...form, amount: e.target.value })} 
-          required 
-          className="w-full p-2 text-xs border rounded" 
-        />
+
+        <div className="grid grid-cols-2 gap-2">
+          <input 
+            type="text" 
+            placeholder="Phone Number" 
+            value={form.phone} 
+            onChange={e => setForm({...form, phone: e.target.value})} 
+            className="p-2.5 text-xs border rounded-lg focus:outline-none" 
+          />
+          <input 
+            type="text" 
+            placeholder="Raqba / Area (e.g. 10 Acre)" 
+            value={form.area} 
+            onChange={e => setForm({...form, area: e.target.value})} 
+            className="p-2.5 text-xs border rounded-lg focus:outline-none" 
+          />
+        </div>
+
         <input 
           type="text" 
-          placeholder="Notes (Optional)" 
+          placeholder="Notes / Extra Details" 
           value={form.notes} 
-          onChange={e => setForm({ ...form, notes: e.target.value })} 
-          className="w-full p-2 text-xs border rounded" 
+          onChange={e => setForm({...form, notes: e.target.value})} 
+          className="w-full p-2.5 text-xs border rounded-lg focus:outline-none" 
         />
-        <button type="submit" className="w-full py-2 bg-[#1e3a29] text-white text-xs font-bold rounded shadow">Save Kharch</button>
+
+        <button type="submit" className="w-full py-2.5 bg-[#1e3a29] text-white text-xs font-bold rounded-lg shadow-md">
+          {editingId ? 'Update Zameendar Save Karein' : '+ Add Zameendar'}
+        </button>
       </form>
 
-      {/* List */}
+      {/* Zameendar List */}
       <div className="space-y-2">
-        <h3 className="text-xs font-bold text-stone-700">Zameendar Expense History</h3>
-        {expenses.map(item => (
-          <div key={item.id} className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm flex justify-between items-center text-xs">
-            <div>
-              <p className="font-bold text-stone-800">{item.category}</p>
-              <p className="text-[10px] text-stone-500">{item.notes}</p>
-            </div>
-            <p className="font-bold text-rose-700">Rs {Number(item.amount).toLocaleString()}</p>
+        <h3 className="text-xs font-bold text-stone-700">Mawjooda Zameendar</h3>
+
+        {loading ? (
+          <p className="text-xs text-stone-400">Loading...</p>
+        ) : kisaans.length === 0 ? (
+          <div className="p-8 text-center border border-dashed border-stone-300 rounded-xl bg-white">
+            <p className="text-xs text-stone-500">Koi Zameendar add nahi hai</p>
           </div>
-        ))}
+        ) : (
+          kisaans.map(k => (
+            <div key={k.id} className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm flex justify-between items-center text-xs">
+              <div className="space-y-1">
+                <p className="font-bold text-stone-800">{k.name}</p>
+                <p className="text-stone-500">
+                  {k.phone ? `📞 ${k.phone}` : ''} {k.area ? `| 🌾 ${k.area}` : ''}
+                </p>
+                {k.notes && <p className="text-[10px] text-stone-400">{k.notes}</p>}
+                
+                <div className="flex gap-3 pt-1">
+                  <button onClick={() => handleEdit(k)} className="text-[10px] text-blue-600 font-bold hover:underline">✏️ Edit</button>
+                  <button onClick={() => handleDelete(k.id)} className="text-[10px] text-rose-600 font-bold hover:underline">🗑️ Delete</button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
