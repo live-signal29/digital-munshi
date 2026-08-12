@@ -6,6 +6,7 @@ import KisaanDetail from './pages/KisaanDetail';
 import Godaam from './pages/Godaam';
 import Tijori from './pages/Tijori';
 import Zameendar from './pages/Zameendar';
+import KhataBook from './pages/KhataBook'; // 👈 Added KhataBook
 import LandingPage from './pages/LandingPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
@@ -47,6 +48,7 @@ export default function App() {
         {activeTab === 'godaam' && <Godaam />}
         {activeTab === 'tijori' && <Tijori />}
         {activeTab === 'zameendar' && <Zameendar />}
+        {activeTab === 'khatabook' && <KhataBook />} {/* 👈 Added KhataBook Screen */}
       </main>
     </div>
   );
