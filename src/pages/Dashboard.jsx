@@ -1,95 +1,181 @@
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
-export default function Dashboard({ setActiveTab }) {
-  const [tijoriData, setTijoriData] = useState({ totalIn: 0, totalOut: 0, remaining: 0 });
-  const [godaamCount, setGodaamCount] = useState(0);
+export default function Home() {
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalKisaans: 0,
+    totalJama: 0,
+    totalKharch: 0,
+    tijoriIn: 0,
+    tijoriOut: 0,
+  });
+
+  const [stockSummary, setStockSummary] = useState([]);
+  const [openStockDetail, setOpenStockDetail] = useState(false);
 
   useEffect(() => {
-    fetchDashboardSummary();
+    fetchDashboardData();
   }, []);
 
-  async function fetchDashboardSummary() {
+  async function fetchDashboardData() {
     setLoading(true);
+
+    // 1. Kisaans Count
+    const { data: kisaans } = await supabase.from('kisaans').select('id');
     
-    // Tijori Summary
+    // 2. Tijori Data
     const { data: tijori } = await supabase.from('tijori_cash').select('*');
-    if (tijori) {
-      const totalIn = tijori.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0);
-      const totalOut = tijori.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0);
-      setTijoriData({ totalIn, totalOut, remaining: totalIn - totalOut });
-    }
+    const tIn = tijori?.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
+    const tOut = tijori?.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
 
-    // Godaam Summary
-    const { data: stock } = await supabase.from('godaam_stock').select('*');
-    if (stock) setGodaamCount(stock.length);
+    // 3. Godaam In Stock Data
+    const { data: godaam } = await supabase.from('godaam_stock').select('*');
+    
+    // 4. Kisaan Issued Items Data
+    const { data: kisaanEntries } = await supabase.from('kisaan_entries').select('*');
 
+    // Group items for breakdown (DAP, Urea, Spray, etc.)
+    const itemMap = {};
+
+    // Calculate Stock In
+    godaam?.forEach(g => {
+      const name = g.item_name.trim();
+      if (!itemMap[name]) {
+        itemMap[name] = { total_in: 0, issued: 0, unit: g.unit || 'Bori' };
+      }
+      itemMap[name].total_in += Number(g.quantity_in || 0);
+    });
+
+    // Calculate Issued to Kisaans
+    kisaanEntries?.forEach(k => {
+      const name = k.item_name.trim();
+      if (itemMap[name]) {
+        itemMap[name].issued += Number(k.amount || 0);
+      } else {
+        itemMap[name] = { total_in: 0, issued: Number(k.amount || 0), unit: 'Item' };
+      }
+    });
+
+    // Format Stock Array
+    const summaryList = Object.keys(itemMap).map(itemName => ({
+      name: itemName,
+      total_in: itemMap[itemName].total_in,
+      issued: itemMap[itemName].issued,
+      remaining: itemMap[itemName].total_in - itemMap[itemName].issued,
+      unit: itemMap[itemName].unit
+    }));
+
+    setStats({
+      totalKisaans: kisaans?.length || 0,
+      tijoriIn: tIn,
+      tijoriOut: tOut,
+    });
+
+    setStockSummary(summaryList);
     setLoading(false);
   }
 
   return (
-    <div className="p-4 max-w-md mx-auto space-y-4">
+    <div className="p-4 max-w-md mx-auto space-y-4 bg-stone-50 min-h-screen">
+      {/* Header */}
       <div>
-        <h2 className="text-2xl font-serif font-bold text-[#1e3a29]">Dashboard</h2>
-        <p className="text-xs text-stone-600">Aap ki zameendari ka khulasa</p>
+        <h1 className="text-2xl font-serif font-bold text-[#1e3a29]">Dashboard</h1>
+        <p className="text-xs text-stone-500">Aap ki zameendari ka mukammal khulasa</p>
       </div>
 
-      {/* Main Stats Cards */}
+      {/* Top 3 Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
-          <div className="flex items-center gap-2 text-emerald-700 text-xs font-semibold mb-1">
-            <i className="fa-solid fa-arrow-down-left"></i> KUL JAMA
-          </div>
-          <div className="text-xl font-bold font-serif text-stone-800">Rs {tijoriData.totalIn.toLocaleString()}</div>
+        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">🌾 Total Kisaan</p>
+          <p className="text-2xl font-bold font-serif text-[#1e3a29] mt-1">{stats.totalKisaans}</p>
         </div>
-        <div className="bg-white p-4 rounded-xl border border-stone-200 shadow-sm">
-          <div className="flex items-center gap-2 text-rose-600 text-xs font-semibold mb-1">
-            <i className="fa-solid fa-arrow-up-right"></i> KUL KHARCH
-          </div>
-          <div className="text-xl font-bold font-serif text-stone-800">Rs {tijoriData.totalOut.toLocaleString()}</div>
+
+        <div className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wide">💰 Tijori Safi Balance</p>
+          <p className="text-xl font-bold font-serif text-emerald-700 mt-1">
+            Rs {(stats.tijoriIn - stats.tijoriOut).toLocaleString()}
+          </p>
         </div>
       </div>
 
       {/* Tijori Summary Card */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
-        <div className="flex justify-between items-center mb-2">
-          <span className="font-bold text-[#1e3a29] text-sm flex items-center gap-2">
-            <i className="fa-solid fa-vault text-amber-700"></i> Tijori Ka Khulasa
-          </span>
-          <button onClick={() => setActiveTab('tijori')} className="text-xs text-emerald-800 underline font-medium">Tijori Dekhein</button>
+      <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-2xl space-y-2">
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-xs text-amber-900 flex items-center gap-1.5">
+            📦 Tijori Khulasa
+          </h3>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-amber-200/60">
-          <div>
-            <p className="text-[10px] text-stone-500">Total Daala</p>
-            <p className="font-bold text-sm text-stone-800">Rs {tijoriData.totalIn.toLocaleString()}</p>
+        <div className="grid grid-cols-3 gap-2 text-center pt-1">
+          <div className="bg-white p-2 rounded-xl border border-amber-100">
+            <p className="text-[9px] text-stone-500">Total Daala</p>
+            <p className="text-xs font-bold text-emerald-700">Rs {stats.tijoriIn.toLocaleString()}</p>
           </div>
-          <div>
-            <p class="text-[10px] text-stone-500">Kul Kharch</p>
-            <p class="font-bold text-sm text-rose-700">Rs {tijoriData.totalOut.toLocaleString()}</p>
+          <div className="bg-white p-2 rounded-xl border border-amber-100">
+            <p className="text-[9px] text-stone-500">Total Kharch</p>
+            <p className="text-xs font-bold text-rose-600">Rs {stats.tijoriOut.toLocaleString()}</p>
           </div>
-          <div>
-            <p class="text-[10px] text-stone-500">Baaqi Safe</p>
-            <p class="font-bold text-sm text-emerald-800">Rs {tijoriData.remaining.toLocaleString()}</p>
+          <div className="bg-white p-2 rounded-xl border border-amber-100">
+            <p className="text-[9px] text-stone-500">Baqi Safe</p>
+            <p className="text-xs font-bold text-amber-800">Rs {(stats.tijoriIn - stats.tijoriOut).toLocaleString()}</p>
           </div>
         </div>
       </div>
 
-      {/* Godaam Summary Card */}
-      <div className="bg-white border border-stone-200 rounded-xl p-4 shadow-sm">
-        <div className="flex justify-between items-center mb-3">
-          <span className="font-bold text-[#1e3a29] text-sm flex items-center gap-2">
-            <i className="fa-solid fa-warehouse text-emerald-800"></i> Godaam Stock Summary
-          </span>
-          <button onClick={() => setActiveTab('godaam')} className="text-xs text-emerald-800 underline font-medium">Godaam Dekhein</button>
-        </div>
-        {godaamCount === 0 ? (
-          <div className="text-center py-6 border border-dashed border-stone-200 rounded-lg">
-            <p className="text-xs text-stone-500">Koi entry darj nahi hai</p>
+      {/* Interactive Khaad & Godaam Summary Card */}
+      <div className="bg-white border border-stone-200 rounded-2xl p-4 shadow-sm space-y-3">
+        <div 
+          onClick={() => setOpenStockDetail(!openStockDetail)}
+          className="flex justify-between items-center cursor-pointer select-none"
+        >
+          <div>
+            <h3 className="font-bold text-sm text-[#1e3a29] flex items-center gap-2">
+              🏬 Godaam & Khaad Stock
+            </h3>
+            <p className="text-[10px] text-stone-500">
+              Click karke DAP, Urea, Spray ka hisab dekhein
+            </p>
           </div>
-        ) : (
-          <p className="text-xs text-stone-700 font-medium">Godaam me {godaamCount} items ka stock record mojood hai.</p>
+          <span className="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded-lg">
+            {openStockDetail ? '▲ Band Karein' : '▼ Details Dekhein'}
+          </span>
+        </div>
+
+        {/* Accordion / Expandable Breakdown Details */}
+        {openStockDetail && (
+          <div className="pt-2 space-y-2 border-t border-stone-100 transition-all">
+            {loading ? (
+              <p className="text-xs text-stone-400">Loading stock details...</p>
+            ) : stockSummary.length === 0 ? (
+              <p className="text-xs text-stone-500 text-center py-2">Godaam me koi stock entry nahi hai</p>
+            ) : (
+              stockSummary.map((item, idx) => (
+                <div key={idx} className="bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-1.5 text-xs">
+                  <div className="flex justify-between items-center font-bold text-stone-800">
+                    <span className="text-sm">🌱 {item.name}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] ${item.remaining < 5 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                      Baqi Stock: {item.remaining} {item.unit}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 text-[10px] pt-1 text-stone-600 border-t border-stone-200/60">
+                    <div>
+                      <span className="block text-stone-400">Total Stock Aaya</span>
+                      <span className="font-bold">{item.total_in} {item.unit}</span>
+                    </div>
+                    <div>
+                      <span className="block text-stone-400">Kisaanon ko Diya</span>
+                      <span className="font-bold text-amber-700">{item.issued} {item.unit}</span>
+                    </div>
+                    <div>
+                      <span className="block text-stone-400">Godaam me Baqi</span>
+                      <span className="font-bold text-emerald-700">{item.remaining} {item.unit}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         )}
       </div>
     </div>
