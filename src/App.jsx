@@ -7,6 +7,8 @@ import Godaam from './pages/Godaam';
 import Tijori from './pages/Tijori';
 import Zameendar from './pages/Zameendar';
 import LandingPage from './pages/LandingPage';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import Terms from './pages/Terms';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -15,15 +17,29 @@ export default function App() {
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
 
-  // Show Landing / Login Page if not logged in
+  // Policy View Before Login or Inside App
+  if (activeTab === 'privacy') return <PrivacyPolicy onBack={() => setActiveTab('home')} />;
+  if (activeTab === 'terms') return <Terms onBack={() => setActiveTab('home')} />;
+
+  // Show Landing Page if not logged in
   if (!user) {
-    return <LandingPage onLogin={(userData) => setUser(userData)} />;
+    return (
+      <LandingPage 
+        onLogin={(userData) => setUser(userData)} 
+        onOpenPolicy={(policy) => setActiveTab(policy)} 
+      />
+    );
   }
 
   return (
     <div className="min-h-screen bg-[#fdfbf7] pb-20">
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} toggleDrawer={toggleDrawer} />
-      <Drawer isOpen={isDrawerOpen} toggleDrawer={toggleDrawer} setActiveTab={setActiveTab} />
+      <Drawer 
+        isOpen={isDrawerOpen} 
+        toggleDrawer={toggleDrawer} 
+        setActiveTab={setActiveTab} 
+        onLogout={() => { setUser(null); setIsDrawerOpen(false); }} 
+      />
 
       <main>
         {activeTab === 'home' && <Dashboard setActiveTab={setActiveTab} />}
