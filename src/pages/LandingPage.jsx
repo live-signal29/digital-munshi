@@ -1,20 +1,19 @@
 import React, { useState } from 'react';
 
-export default function LandingPage({ onLogin }) {
+export default function LandingPage({ onLogin, onOpenPolicy }) {
   const [isLoginView, setIsLoginView] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleAuth = (e) => {
     e.preventDefault();
-    // Simple Auth Bypass / Supabase Auth integration point
     if (email && password) {
       onLogin({ email });
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#fdfbf7] flex flex-col justify-between p-6">
+    <div className="min-h-screen bg-[#fdfbf7] flex flex-col justify-between p-6 max-w-md mx-auto">
       {/* Header */}
       <div className="flex justify-between items-center pt-2">
         <div className="flex items-center gap-3">
@@ -32,7 +31,7 @@ export default function LandingPage({ onLogin }) {
         </button>
       </div>
 
-      {/* Main Content / Auth Form */}
+      {/* Auth / Info Screen */}
       <div className="my-auto py-8">
         {!isLoginView ? (
           <div className="space-y-6 text-center">
@@ -48,16 +47,10 @@ export default function LandingPage({ onLogin }) {
             </p>
 
             <div className="space-y-3 pt-4 max-w-xs mx-auto">
-              <button 
-                onClick={() => setIsLoginView(true)}
-                className="w-full bg-[#1e3a29] text-white py-3 rounded-xl font-bold text-sm shadow-md"
-              >
+              <button onClick={() => setIsLoginView(true)} className="w-full bg-[#1e3a29] text-white py-3 rounded-xl font-bold text-sm shadow-md">
                 Muft account banayein
               </button>
-              <button 
-                onClick={() => setIsLoginView(true)}
-                className="w-full bg-stone-100 border border-stone-200 text-stone-700 py-3 rounded-xl font-bold text-sm"
-              >
+              <button onClick={() => setIsLoginView(true)} className="w-full bg-stone-100 border border-stone-200 text-stone-700 py-3 rounded-xl font-bold text-sm">
                 Pehle se account hai? Login
               </button>
             </div>
@@ -69,25 +62,11 @@ export default function LandingPage({ onLogin }) {
             </h3>
             <div>
               <label className="text-[10px] text-stone-500 font-bold block mb-1">EMAIL / PHONE</label>
-              <input 
-                type="text" 
-                required 
-                value={email} 
-                onChange={e => setEmail(e.target.value)}
-                placeholder="03001234567" 
-                className="w-full p-2.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:border-[#1e3a29]" 
-              />
+              <input type="text" required value={email} onChange={e => setEmail(e.target.value)} placeholder="03001234567" className="w-full p-2.5 text-xs border border-stone-300 rounded-lg focus:outline-none" />
             </div>
             <div>
               <label className="text-[10px] text-stone-500 font-bold block mb-1">PASSWORD</label>
-              <input 
-                type="password" 
-                required 
-                value={password} 
-                onChange={e => setPassword(e.target.value)}
-                placeholder="••••••••" 
-                className="w-full p-2.5 text-xs border border-stone-300 rounded-lg focus:outline-none focus:border-[#1e3a29]" 
-              />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" className="w-full p-2.5 text-xs border border-stone-300 rounded-lg focus:outline-none" />
             </div>
             <button type="submit" className="w-full bg-[#1e3a29] text-white py-3 rounded-xl font-bold text-xs shadow-md">
               Dakhil Hon
@@ -96,8 +75,14 @@ export default function LandingPage({ onLogin }) {
         )}
       </div>
 
-      <div className="text-center text-[10px] text-stone-400">
-        🔒 Aap ka data sirf aap dekh sakte hain
+      {/* Footer Links */}
+      <div className="text-center text-[10px] text-stone-400 space-y-1">
+        <p>🔒 Aap ka data sirf aap dekh sakte hain</p>
+        <div className="flex justify-center gap-3 pt-1">
+          <button onClick={() => onOpenPolicy('privacy')} className="underline hover:text-stone-600">Privacy Policy</button>
+          <span>•</span>
+          <button onClick={() => onOpenPolicy('terms')} className="underline hover:text-stone-600">Terms of Service</button>
+        </div>
       </div>
     </div>
   );
