@@ -6,7 +6,7 @@ import KisaanDetail from './pages/KisaanDetail';
 import Godaam from './pages/Godaam';
 import Tijori from './pages/Tijori';
 import Zameendar from './pages/Zameendar';
-import KhataBook from './pages/KhataBook'; // ðŸ‘ˆ Added KhataBook
+import KhataBook from './pages/KhataBook';
 import LandingPage from './pages/LandingPage';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Terms from './pages/Terms';
@@ -15,8 +15,15 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedKisaanId, setSelectedKisaanId] = useState(null); // 👈 Fix for Kisaan Detail navigation
 
   const toggleDrawer = () => setIsDrawerOpen(!isDrawerOpen);
+
+  // Function to open specific Kisaan Detail
+  const handleSelectKisaan = (id) => {
+    setSelectedKisaanId(id);
+    setActiveTab('kisaan');
+  };
 
   // Policy View Before Login or Inside App
   if (activeTab === 'privacy') return <PrivacyPolicy onBack={() => setActiveTab('home')} />;
@@ -43,12 +50,12 @@ export default function App() {
       />
 
       <main>
-        {activeTab === 'home' && <Dashboard setActiveTab={setActiveTab} />}
-        {activeTab === 'kisaan' && <KisaanDetail />}
+        {activeTab === 'home' && <Dashboard setActiveTab={setActiveTab} onSelectKisaan={handleSelectKisaan} />}
+        {activeTab === 'kisaan' && <KisaanDetail kisaanId={selectedKisaanId} onBack={() => setActiveTab('zameendar')} />}
         {activeTab === 'godaam' && <Godaam />}
         {activeTab === 'tijori' && <Tijori />}
-        {activeTab === 'zameendar' && <Zameendar />}
-        {activeTab === 'khatabook' && <KhataBook />} {/* ðŸ‘ˆ Added KhataBook Screen */}
+        {activeTab === 'zameendar' && <Zameendar onSelectKisaan={handleSelectKisaan} />}
+        {activeTab === 'khatabook' && <KhataBook />}
       </main>
     </div>
   );
