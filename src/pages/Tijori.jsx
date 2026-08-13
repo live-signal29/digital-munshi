@@ -20,9 +20,16 @@ export default function Tijori() {
 
   async function fetchEntries() {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('tijori_cash')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
       
     if (error) {
@@ -40,18 +47,22 @@ export default function Tijori() {
       return alert("Baraye karam durust Amount (Rs) likhein");
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const payload = {
       direction: form.direction,
       amount: parsedAmount,
-      source: form.source.trim() || 'Cash Entry'
+      source: form.source.trim() || 'Cash Entry',
+      user_id: user.id
     };
 
     if (editingId) {
-      // Edit Transaction Entry
       const { error } = await supabase
         .from('tijori_cash')
         .update(payload)
-        .eq('id', editingId);
+        .eq('id', editingId)
+        .eq('user_id', user.id);
 
       if (!error) {
         setEditingId(null);
@@ -62,7 +73,6 @@ export default function Tijori() {
         alert("Error updating: " + error.message);
       }
     } else {
-      // New Transaction Entry
       const { error } = await supabase.from('tijori_cash').insert([payload]);
       if (!error) {
         resetForm();
@@ -90,13 +100,20 @@ export default function Tijori() {
 
   async function handleDelete(id) {
     if (window.confirm("Kya aap is cash transaction ko delete karna chahte hain?")) {
-      const { error } = await supabase.from('tijori_cash').delete().eq('id', id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('tijori_cash')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
       if (!error) fetchEntries();
       else alert("Error deleting: " + error.message);
     }
   }
 
-  // Dashboard Calculations
   const totalIn = entries
     .filter(e => e.direction === 'in')
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -107,7 +124,6 @@ export default function Tijori() {
 
   const totalBalance = totalIn - totalOut;
 
-  // CSV Export Functionality
   function exportToCSV() {
     if (!entries.length) return alert('Koi cash record nahi hai export karne ke liye');
     const headers = ['Tareekh', 'Kisam (In/Out)', 'Tafseel / Source', 'Amount (Rs)'];
@@ -130,7 +146,6 @@ export default function Tijori() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Top Main Balance Card */}
       <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
         <div className="flex justify-between items-center">
           <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -153,7 +168,6 @@ export default function Tijori() {
         </div>
       </div>
 
-      {/* Mini Dashboard - Stats Summary */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-sm text-center">
           <p className="text-[8px] text-stone-500 font-bold uppercase">Total Cash In</p>
@@ -175,7 +189,6 @@ export default function Tijori() {
         </div>
       </div>
 
-      {/* Form Container */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -249,7 +262,6 @@ export default function Tijori() {
         )}
       </div>
 
-      {/* Cash History Section */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Tijori Cash History</h3>
