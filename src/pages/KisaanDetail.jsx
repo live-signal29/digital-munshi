@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function KisaanDetail() {
   const [kisaans, setKisaans] = useState([]);
@@ -11,9 +14,11 @@ export default function KisaanDetail() {
   const [kisaanEditForm, setKisaanEditForm] = useState({ name: '', zameen_acre: '' });
   const [editingEntryId, setEditingEntryId] = useState(null);
 
-  // Naya Kisaan Add Karne Ke Liye State
   const [showAddKisaan, setShowAddKisaan] = useState(false);
   const [newKisaanForm, setNewKisaanForm] = useState({ name: '', zameen_acre: '' });
+
+  const [showEntryForm, setShowEntryForm] = useState(false);
+  const [hideEntries, setHideEntries] = useState(false);
 
   const [form, setForm] = useState({
     type: 'kharch',
@@ -76,7 +81,6 @@ export default function KisaanDetail() {
 
   const selectedKisaan = kisaans.find((k) => k.id === selectedKisaanId);
 
-  // Naya Kisaan Save Karna
   async function handleAddKisaan(e) {
     e.preventDefault();
     if (!newKisaanForm.name) return alert('Kisaan ka naam likhna zaroori hai');
@@ -135,6 +139,7 @@ export default function KisaanDetail() {
 
       setEditingEntryId(null);
       resetForm();
+      setShowEntryForm(false);
       fetchEntries(selectedKisaanId);
     } else {
       const { error } = await supabase.from('kisaan_items').insert([
@@ -156,6 +161,7 @@ export default function KisaanDetail() {
       }
 
       resetForm();
+      setShowEntryForm(false);
       fetchEntries(selectedKisaanId);
     }
   }
@@ -166,6 +172,7 @@ export default function KisaanDetail() {
 
   function handleEditEntry(item) {
     setEditingEntryId(item.id);
+    setShowEntryForm(true);
     const isStandardUnit = ['Bori', 'Liter', 'Acre', 'Ghanti', 'Kg'].includes(item.unit);
     setForm({
       type: item.type || 'kharch',
@@ -209,11 +216,85 @@ export default function KisaanDetail() {
     fetchKisaans();
   }
 
-  const totalKharch = entries.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+  const totalKharch = entries
+    .filter((e) => e.type === 'kharch')
+    .reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+
+  const totalAamdani = entries
+    .filter((e) => e.type === 'aamdani')
+    .reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
+
+  const netBalance = totalAamdani - totalKharch;
+
+  // Har item ka alag breakdown (DAP, SSP, Urea, Spray, Zinc, Beej, Tractor waghera)
+  const itemBreakdown = {};
+  entries.forEach((e) => {
+    const key = (e.item_name || 'Ather').trim().toUpperCase();
+    if (!itemBreakdown[key]) {
+      itemBreakdown[key] = { quantity: 0, unit: e.unit || '', amount: 0, type: e.type };
+    }
+    itemBreakdown[key].quantity += Number(e.quantity || 0);
+    itemBreakdown[key].amount += Number(e.total_amount || 0);
+  });
+  const itemBreakdownList = Object.keys(itemBreakdown).map((name) => ({
+    name,
+    ...itemBreakdown[name],
+  }));
+
+  function exportToCSV() {
+    if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
+    const headers = ['Item Name', 'Type', 'Quantity', 'Unit', 'Rate', 'Total Amount'];
+    const rows = entries.map((e) => [e.item_name, e.type, e.quantity, e.unit, e.rate, e.total_amount]);
+    const csvContent = headers.join(',') + '\n' + rows.map((r) => r.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${selectedKisaan?.name || 'kisaan'}_entries.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function exportToExcel() {
+    if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
+    const wsData = entries.map((e) => ({
+      'Item Name': e.item_name,
+      Type: e.type,
+      Quantity: e.quantity,
+      Unit: e.unit,
+      Rate: e.rate,
+      'Total Amount': e.total_amount,
+    }));
+    const ws = XLSX.utils.json_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Entries');
+    XLSX.writeFile(wb, `${selectedKisaan?.name || 'kisaan'}_entries.xlsx`);
+  }
+
+  function exportToPDF() {
+    if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text(`${selectedKisaan?.name || 'Kisaan'} - Khata Entries`, 14, 15);
+    autoTable(doc, {
+      startY: 20,
+      head: [['Item', 'Type', 'Qty', 'Unit', 'Rate', 'Total']],
+      body: entries.map((e) => [
+        e.item_name,
+        e.type,
+        e.quantity,
+        e.unit,
+        e.rate,
+        `Rs ${Number(e.total_amount).toLocaleString()}`,
+      ]),
+    });
+    doc.save(`${selectedKisaan?.name || 'kisaan'}_entries.pdf`);
+  }
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Naya Kisaan Add Karein Button + Form */}
+      {/* Naya Kisaan Add Karein */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">➕ Naya Kisaan Add Karein</h3>
@@ -253,6 +334,7 @@ export default function KisaanDetail() {
         )}
       </div>
 
+      {/* Kisaan Selector */}
       <div className="flex gap-2 items-center">
         <select
           value={selectedKisaanId}
@@ -268,6 +350,7 @@ export default function KisaanDetail() {
         </select>
       </div>
 
+      {/* Kisaan Profile Card */}
       {selectedKisaan && (
         <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-2">
           {isEditingKisaan ? (
@@ -332,129 +415,219 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      <form onSubmit={handleSaveEntry} className="bg-white p-4 rounded-2xl border border-stone-200 space-y-3 shadow-sm">
+      {/* Mini Dashboard - Summary Row */}
+      {selectedKisaan && (
+        <div className="grid grid-cols-4 gap-1.5">
+          <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-sm text-center">
+            <p className="text-[8px] text-stone-500 font-bold uppercase">Entries</p>
+            <p className="text-xs font-bold text-[#1e3a29] mt-0.5">{entries.length}</p>
+          </div>
+          <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-sm text-center">
+            <p className="text-[8px] text-stone-500 font-bold uppercase">Kharch</p>
+            <p className="text-xs font-bold text-rose-600 mt-0.5">Rs {totalKharch.toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-sm text-center">
+            <p className="text-[8px] text-stone-500 font-bold uppercase">Aamdani</p>
+            <p className="text-xs font-bold text-emerald-700 mt-0.5">Rs {totalAamdani.toLocaleString()}</p>
+          </div>
+          <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-sm text-center">
+            <p className="text-[8px] text-stone-500 font-bold uppercase">Balance</p>
+            <p className={`text-xs font-bold mt-0.5 ${netBalance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+              Rs {netBalance.toLocaleString()}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Mini Dashboard - Item Wise Breakdown (DAP, SSP, Urea, Spray, Zinc, Beej, Tractor waghera) */}
+      {selectedKisaan && itemBreakdownList.length > 0 && (
+        <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
+          <h4 className="text-[10px] font-bold text-stone-600 uppercase mb-2">📦 Item Wise Khulasa</h4>
+          <div className="grid grid-cols-2 gap-1.5">
+            {itemBreakdownList.map((item, idx) => (
+              <div
+                key={idx}
+                className={`p-2 rounded-lg border text-[10px] ${
+                  item.type === 'aamdani' ? 'bg-emerald-50 border-emerald-200' : 'bg-stone-50 border-stone-200'
+                }`}
+              >
+                <p className="font-bold text-stone-800 truncate">{item.name}</p>
+                <p className="text-stone-500">
+                  {item.quantity} {item.unit}
+                </p>
+                <p className={`font-bold ${item.type === 'aamdani' ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  Rs {item.amount.toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Nayi Entry Add Karein - Toggle */}
+      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
-            {editingEntryId ? '✍️ Entry Edit Karein' : 'Nayi Entry Add Karein'}
+            {editingEntryId ? '✍️ Entry Edit Karein' : '➕ Nayi Entry Add Karein'}
           </h3>
-          {editingEntryId && (
-            <button type="button" onClick={() => { setEditingEntryId(null); resetForm(); }} className="text-[10px] text-rose-600 font-bold">
-              Cancel Edit
-            </button>
-          )}
-        </div>
-
-        <select
-          value={form.type}
-          onChange={(e) => setForm({ ...form, type: e.target.value })}
-          className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
-        >
-          <option value="kharch">Kharch (DAP, Spray, Beej, Tractor)</option>
-          <option value="aamdani">Paidawar / Aamdani (Gandum, Kapaas)</option>
-        </select>
-
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="text"
-            placeholder="Item Name (e.g DAP)"
-            value={form.item_name}
-            onChange={(e) => setForm({ ...form, item_name: e.target.value })}
-            required
-            className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
-          />
-
-          <select
-            value={form.unit}
-            onChange={(e) => setForm({ ...form, unit: e.target.value })}
-            className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none bg-stone-50"
+          <button
+            type="button"
+            onClick={() => {
+              if (editingEntryId) {
+                setEditingEntryId(null);
+                resetForm();
+                setShowEntryForm(false);
+              } else {
+                setShowEntryForm(!showEntryForm);
+              }
+            }}
+            className="text-[10px] font-bold text-emerald-700 hover:underline"
           >
-            <option value="Bori">Bori</option>
-            <option value="Liter">Liter</option>
-            <option value="Acre">Acre</option>
-            <option value="Ghanti">Ghanti (Tractor)</option>
-            <option value="Kg">Kg</option>
-            <option value="Custom">Custom (Apna Likhain)</option>
-          </select>
+            {showEntryForm || editingEntryId ? 'Band Karein' : 'Entry Add +'}
+          </button>
         </div>
 
-        {form.unit === 'Custom' && (
-          <input
-            type="text"
-            placeholder="Custom Unit (e.g. Nag / Ghoni / Cart)"
-            value={form.custom_unit}
-            onChange={(e) => setForm({ ...form, custom_unit: e.target.value })}
-            className="w-full p-2.5 text-xs border border-amber-300 bg-amber-50 rounded-xl focus:outline-none"
-          />
-        )}
-
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            type="number"
-            placeholder="Quantity"
-            value={form.quantity}
-            onChange={(e) => setForm({ ...form, quantity: e.target.value })}
-            className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
-          />
-          <input
-            type="number"
-            placeholder="Rate/Unit"
-            value={form.rate}
-            onChange={(e) => setForm({ ...form, rate: e.target.value })}
-            className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
-          />
-        </div>
-
-        <button
-          type="submit"
-          className="w-full py-3 bg-[#1e3a29] text-white text-xs font-bold rounded-xl shadow-md hover:bg-[#162c1f]"
-        >
-          {editingEntryId ? 'Update Entry Save Karein' : 'Record Entry Save Karein'}
-        </button>
-      </form>
-
-      <div className="space-y-2">
-        <h3 className="text-xs font-bold text-stone-700">Khata Entries</h3>
-
-        {loading ? (
-          <p className="text-xs text-stone-400">Loading...</p>
-        ) : entries.length === 0 ? (
-          <div className="p-6 text-center border border-dashed rounded-2xl bg-white">
-            <p className="text-xs text-stone-500">Is kisaan ki koi entry nahi hai.</p>
-          </div>
-        ) : (
-          entries.map((item) => (
-            <div
-              key={item.id}
-              className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm flex justify-between items-center"
+        {(showEntryForm || editingEntryId) && (
+          <form onSubmit={handleSaveEntry} className="space-y-3 pt-3">
+            <select
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
             >
-              <div className="space-y-1">
-                <p className="font-bold text-xs text-stone-800 uppercase">{item.item_name}</p>
-                <p className="text-[11px] text-stone-500">
-                  {item.quantity} {item.unit} × Rs {item.rate}
-                </p>
-                <div className="flex gap-3 pt-1">
-                  <button
-                    onClick={() => handleEditEntry(item)}
-                    className="text-[10px] text-blue-600 font-bold hover:underline"
-                  >
-                    ✏️ Edit
-                  </button>
-                  <button
-                    onClick={() => handleDeleteEntry(item.id)}
-                    className="text-[10px] text-rose-600 font-bold hover:underline"
-                  >
-                    🗑️ Delete
-                  </button>
-                </div>
-              </div>
+              <option value="kharch">Kharch (DAP, Spray, Beej, Tractor)</option>
+              <option value="aamdani">Paidawar / Aamdani (Gandum, Kapaas)</option>
+            </select>
 
-              <div className="text-right">
-                <p className={`font-bold text-sm ${item.type === 'aamdani' ? 'text-emerald-700' : 'text-stone-800'}`}>
-                  Rs {Number(item.total_amount).toLocaleString()}
-                </p>
-              </div>
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="text"
+                placeholder="Item Name (e.g DAP)"
+                value={form.item_name}
+                onChange={(e) => setForm({ ...form, item_name: e.target.value })}
+                required
+                className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
+              />
+
+              <select
+                value={form.unit}
+                onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none bg-stone-50"
+              >
+                <option value="Bori">Bori</option>
+                <option value="Liter">Liter</option>
+                <option value="Acre">Acre</option>
+                <option value="Ghanti">Ghanti (Tractor)</option>
+                <option value="Kg">Kg</option>
+                <option value="Custom">Custom (Apna Likhain)</option>
+              </select>
             </div>
-          ))
+
+            {form.unit === 'Custom' && (
+              <input
+                type="text"
+                placeholder="Custom Unit (e.g. Nag / Ghoni / Cart)"
+                value={form.custom_unit}
+                onChange={(e) => setForm({ ...form, custom_unit: e.target.value })}
+                className="w-full p-2.5 text-xs border border-amber-300 bg-amber-50 rounded-xl focus:outline-none"
+              />
+            )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="number"
+                placeholder="Quantity"
+                value={form.quantity}
+                onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
+              />
+              <input
+                type="number"
+                placeholder="Rate/Unit"
+                value={form.rate}
+                onChange={(e) => setForm({ ...form, rate: e.target.value })}
+                className="p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 bg-[#1e3a29] text-white text-xs font-bold rounded-xl shadow-md hover:bg-[#162c1f]"
+            >
+              {editingEntryId ? 'Update Entry Save Karein' : 'Record Entry Save Karein'}
+            </button>
+          </form>
+        )}
+      </div>
+
+      {/* Khata Entries List with Hide Toggle + Export */}
+      <div className="space-y-2">
+        <div className="flex justify-between items-center flex-wrap gap-2">
+          <h3 className="text-xs font-bold text-stone-700">Khata Entries</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <label className="flex items-center gap-1 text-[10px] text-stone-600 font-medium">
+              <input
+                type="checkbox"
+                checked={hideEntries}
+                onChange={(e) => setHideEntries(e.target.checked)}
+              />
+              Hide List
+            </label>
+            <button onClick={exportToCSV} className="text-[10px] font-bold text-blue-600 hover:underline">
+              📄 CSV
+            </button>
+            <button onClick={exportToExcel} className="text-[10px] font-bold text-green-700 hover:underline">
+              📊 Excel
+            </button>
+            <button onClick={exportToPDF} className="text-[10px] font-bold text-rose-600 hover:underline">
+              🧾 PDF
+            </button>
+          </div>
+        </div>
+
+        {!hideEntries && (
+          <>
+            {loading ? (
+              <p className="text-xs text-stone-400">Loading...</p>
+            ) : entries.length === 0 ? (
+              <div className="p-6 text-center border border-dashed rounded-2xl bg-white">
+                <p className="text-xs text-stone-500">Is kisaan ki koi entry nahi hai.</p>
+              </div>
+            ) : (
+              entries.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-white p-3.5 rounded-2xl border border-stone-200 shadow-sm flex justify-between items-center"
+                >
+                  <div className="space-y-1">
+                    <p className="font-bold text-xs text-stone-800 uppercase">{item.item_name}</p>
+                    <p className="text-[11px] text-stone-500">
+                      {item.quantity} {item.unit} × Rs {item.rate}
+                    </p>
+                    <div className="flex gap-3 pt-1">
+                      <button
+                        onClick={() => handleEditEntry(item)}
+                        className="text-[10px] text-blue-600 font-bold hover:underline"
+                      >
+                        ✏️ Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteEntry(item.id)}
+                        className="text-[10px] text-rose-600 font-bold hover:underline"
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-right">
+                    <p className={`font-bold text-sm ${item.type === 'aamdani' ? 'text-emerald-700' : 'text-stone-800'}`}>
+                      Rs {Number(item.total_amount).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
     </div>
