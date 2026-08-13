@@ -3,29 +3,431 @@ import { supabase } from '../lib/supabase';
 
 export default function LandingPage({ onLogin, onOpenPolicy }) {
   const [authMode, setAuthMode] = useState(null);
+  const [verificationMode, setVerificationMode] = useState(null);
+
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+
+  const [verificationCode, setVerificationCode] = useState('');
+
+  const [registeredContact, setRegisteredContact] = useState('');
+
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Mobile number ko internal email format mein convert karta hai.
-  // Agar user actual email dale to wahi use hoga.
-  const formatAuthEmail = (input) => {
-    const clean = input.trim();
+  /*
+   * -----------------------------------------
+   * CONTACT TYPE
+   * -----------------------------------------
+   */
 
-    if (clean.includes('@')) {
-      return clean.toLowerCase();
+  const isEmail = (value) => {
+    return value.includes('@');
+  };
+
+  /*
+   * -----------------------------------------
+   * PAKISTAN PHONE FORMAT
+   *
+   * 03001234567
+   *      ↓
+   * +923001234567
+   * -----------------------------------------
+   */
+
+  const formatPhone = (input) => {
+    let clean = input.trim().replace(/[^\d+]/g, '');
+
+    if (clean.startsWith('00')) {
+      clean = '+' + clean.substring(2);
     }
 
-    const phoneClean = clean.replace(/[^0-9]/g, '');
+    if (clean.startsWith('+92')) {
+      return clean;
+    }
 
-    if (!phoneClean) {
+    if (clean.startsWith('92')) {
+      return '+' + clean;
+    }
+
+    if (clean.startsWith('0')) {
+      return '+92' + clean.substring(1);
+    }
+
+    return clean;
+  };
+
+  /*
+   * -----------------------------------------
+   * PASSWORD VALIDATION
+   * -----------------------------------------
+   */
+
+  const validatePassword = (value) => {
+    if (value.length < 6) {
+      return 'Password kam az kam 6 characters ka hona chahiye.';
+    }
+
+    if (!/[A-Z]/.test(value)) {
+      return 'Password mein kam az kam 1 capital letter hona chahiye.';
+    }
+
+    if (!/[a-z]/.test(value)) {
+      return 'Password mein kam az kam 1 small letter hona chahiye.';
+    }
+
+    if (!/[0-9]/.test(value)) {
+      return 'Password mein kam az kam 1 number hona chahiye.';
+    }
+
+    return '';
+  };
+
+  /*
+   * -----------------------------------------
+   * REGISTER
+   * -----------------------------------------
+   */
+
+  const handleRegister = async () => {
+    if (!fullName.trim()) {
+      throw new Error('Apna poora naam enter karein.');
+    }
+
+    if (!email.trim()) {
       throw new Error('Mobile number ya email enter karein.');
     }
 
-    return `${phoneClean}@digitalmunshi.com`;
+    const passwordError = validatePassword(password);
+
+    if (passwordError) {
+      throw new Error(passwordError);
+    }
+
+    let contact;
+    let signupData;
+
+    /*
+     * EMAIL REGISTER
+     */
+
+    if (isEmail(email.trim())) {
+      contact = email.trim().toLowerCase();
+
+      signupData = await supabase.auth.signUp({
+        email: contact,
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim()
+          }
+        }
+      });
+    }
+
+    /*
+     * PHONE REGISTER
+     */
+
+    else {
+      contact = formatPhone(email);
+
+      if (!contact || contact.length < 10) {
+        throw new Error(
+          'Valid mobile number enter karein. Example: 03001234567'
+        );
+      }
+
+      signupData = await supabase.auth.signUp({
+        phone: contact,
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim()
+          }
+        }
+      });
+    }
+
+    if (signupData.error) {
+      throw signupData.error;
+    }
+
+    if (!signupData.data?.user) {
+      throw new Error(
+        'Account create nahi ho saka. Dobara try karein.'
+      );
+    }
+
+    /*
+     * Agar verification required hai
+     */
+
+    if (!signupData.data.session) {
+      setRegisteredContact(contact);
+
+      setVerificationMode(
+        isEmail(contact) ? 'email' : 'phone'
+      );
+
+      setVerificationCode('');
+      setErrorMsg('');
+
+      return;
+    }
+
+    /*
+     * Agar Supabase ne directly session de di
+     */
+
+    if (signupData.data.session?.user) {
+      onLogin(signupData.data.session.user);
+      return;
+    }
+
+    /*
+     * Safety check
+     */
+
+    throw new Error(
+      'Account create hua lekin login session nahi bani.'
+    );
   };
+
+  /*
+   * -----------------------------------------
+   * VERIFY OTP
+   * -----------------------------------------
+   */
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+
+    if (loading) return;
+
+    setErrorMsg('');
+    setLoading(true);
+
+    try {
+      const token = verificationCode.trim();
+
+      if (!/^\d{6}$/.test(token)) {
+        throw new Error(
+          '6 digit verification code enter karein.'
+        );
+      }
+
+      let verifyResult;
+
+      /*
+       * EMAIL OTP
+       */
+
+      if (verificationMode === 'email') {
+        verifyResult = await supabase.auth.verifyOtp({
+          email: registeredContact,
+          token,
+          type: 'signup'
+        });
+      }
+
+      /*
+       * PHONE OTP
+       */
+
+      else {
+        verifyResult = await supabase.auth.verifyOtp({
+          phone: registeredContact,
+          token,
+          type: 'sms'
+        });
+      }
+
+      if (verifyResult.error) {
+        throw verifyResult.error;
+      }
+
+      if (!verifyResult.data?.user) {
+        throw new Error(
+          'Verification complete nahi hui. Dobara code check karein.'
+        );
+      }
+
+      /*
+       * Verification ke baad actual session check
+       */
+
+      const {
+        data: sessionData,
+        error: sessionError
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!sessionData?.session?.user) {
+        /*
+         * Kuch Supabase configurations mein verify ke baad
+         * session automatically nahi banti.
+         *
+         * Isliye password ke saath actual login karte hain.
+         */
+
+        const loginPayload =
+          verificationMode === 'email'
+            ? {
+                email: registeredContact,
+                password
+              }
+            : {
+                phone: registeredContact,
+                password
+              };
+
+        const { data: loginData, error: loginError } =
+          await supabase.auth.signInWithPassword(
+            loginPayload
+          );
+
+        if (loginError) {
+          throw loginError;
+        }
+
+        if (!loginData?.session?.user) {
+          throw new Error(
+            'Verification ho gayi lekin login session nahi bani.'
+          );
+        }
+
+        onLogin(loginData.session.user);
+        return;
+      }
+
+      /*
+       * Real Supabase session
+       */
+
+      onLogin(sessionData.session.user);
+
+    } catch (err) {
+      console.error('Verification error:', err);
+
+      setErrorMsg(
+        err?.message ||
+          'Verification code ghalat hai. Dobara try karein.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /*
+   * -----------------------------------------
+   * RESEND OTP
+   * -----------------------------------------
+   */
+
+  const resendCode = async () => {
+    if (resending) return;
+
+    setErrorMsg('');
+    setResending(true);
+
+    try {
+      if (verificationMode === 'email') {
+        const { error } =
+          await supabase.auth.resend({
+            type: 'signup',
+            email: registeredContact
+          });
+
+        if (error) throw error;
+      } else {
+        const { error } =
+          await supabase.auth.resend({
+            type: 'sms',
+            phone: registeredContact
+          });
+
+        if (error) throw error;
+      }
+
+      alert(
+        'Verification code dobara bhej diya gaya hai.'
+      );
+
+    } catch (err) {
+      console.error('Resend error:', err);
+
+      setErrorMsg(
+        err?.message ||
+          'Code resend nahi ho saka. Thori dair baad dobara try karein.'
+      );
+    } finally {
+      setResending(false);
+    }
+  };
+
+  /*
+   * -----------------------------------------
+   * LOGIN
+   * -----------------------------------------
+   */
+
+  const handleLogin = async () => {
+    if (!email.trim()) {
+      throw new Error(
+        'Mobile number ya email enter karein.'
+      );
+    }
+
+    if (!password) {
+      throw new Error('Password enter karein.');
+    }
+
+    let loginData;
+
+    if (isEmail(email.trim())) {
+      loginData = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password
+      });
+    } else {
+      const phoneNumber = formatPhone(email);
+
+      loginData = await supabase.auth.signInWithPassword({
+        phone: phoneNumber,
+        password
+      });
+    }
+
+    if (loginData.error) {
+      throw loginData.error;
+    }
+
+    if (!loginData.data?.session?.user) {
+      throw new Error(
+        'Login session nahi bani. Dobara login karein.'
+      );
+    }
+
+    /*
+     * ONLY REAL SUPABASE USER
+     */
+
+    onLogin(loginData.data.session.user);
+  };
+
+  /*
+   * -----------------------------------------
+   * MAIN AUTH HANDLER
+   * -----------------------------------------
+   */
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -36,171 +438,41 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     setLoading(true);
 
     try {
-      /*
-       * ================================
-       * FORGOT PASSWORD
-       * ================================
-       */
-      if (authMode === 'forgot') {
-        const authEmail = formatAuthEmail(email);
-
-        const { error } = await supabase.auth.resetPasswordForEmail(
-          authEmail,
-          {
-            redirectTo: `${window.location.origin}`
-          }
-        );
-
-        if (error) {
-          throw error;
-        }
-
-        alert(
-          'Password reset link registered email par bhej diya gaya hai.'
-        );
-
-        setAuthMode('login');
-        setPassword('');
-        return;
-      }
-
-      const authEmail = formatAuthEmail(email);
-
-      /*
-       * ================================
-       * REGISTER
-       * ================================
-       */
       if (authMode === 'register') {
-        if (!fullName.trim()) {
-          throw new Error('Apna poora naam enter karein.');
-        }
-
-        if (password.length < 6) {
-          throw new Error(
-            'Password kam az kam 6 characters ka hona chahiye.'
-          );
-        }
-
-        const { data, error } = await supabase.auth.signUp({
-          email: authEmail,
-          password: password,
-          options: {
-            data: {
-              full_name: fullName.trim()
-            }
-          }
-        });
-
-        if (error) {
-          throw error;
-        }
-
-        /*
-         * IMPORTANT:
-         *
-         * Kabhi Supabase signup ke baad email verification
-         * required hone ki wajah se session null return karta hai.
-         *
-         * Aisi situation mein fake user bana kar dashboard
-         * OPEN NAHI karna.
-         */
-        if (!data?.user) {
-          throw new Error(
-            'Account create nahi ho saka. Dobara try karein.'
-          );
-        }
-
-        if (!data?.session) {
-          setAuthMode('login');
-          setPassword('');
-
-          alert(
-            'Account successfully create ho gaya hai. ' +
-            'Agar email verification enabled hai to pehle email verify karein, ' +
-            'phir Login karein.'
-          );
-
-          return;
-        }
-
-        /*
-         * Yahan sirf REAL Supabase user ko App mein bhejna hai.
-         */
-        onLogin(data.user);
-
+        await handleRegister();
         return;
       }
 
-      /*
-       * ================================
-       * LOGIN
-       * ================================
-       */
       if (authMode === 'login') {
-        if (!password) {
-          throw new Error('Password enter karein.');
-        }
-
-        const { data, error } =
-          await supabase.auth.signInWithPassword({
-            email: authEmail,
-            password: password
-          });
-
-        /*
-         * IMPORTANT:
-         * Login error par kabhi fake/local login nahi hoga.
-         */
-        if (error) {
-          throw error;
-        }
-
-        /*
-         * Real session verify karo.
-         */
-        if (!data?.session || !data?.user) {
-          throw new Error(
-            'Login session create nahi hui. Dobara login karein.'
-          );
-        }
-
-        /*
-         * Sirf REAL Supabase user ko dashboard mein bhejo.
-         */
-        onLogin(data.user);
-
+        await handleLogin();
         return;
       }
 
     } catch (err) {
       console.error('Authentication error:', err);
 
-      let message = 'Authentication failed. Dobara try karein.';
+      let message =
+        err?.message ||
+        'Authentication failed. Dobara try karein.';
 
-      if (err?.message) {
-        message = err.message;
-      }
+      const lower = message.toLowerCase();
 
-      /*
-       * Common Supabase messages ko simple language mein show karo.
-       */
       if (
-        message.toLowerCase().includes('invalid login credentials')
+        lower.includes('invalid login credentials')
       ) {
         message =
           'Mobile/Email ya Password ghalat hai.';
       }
 
       if (
-        message.toLowerCase().includes('user already registered')
+        lower.includes('user already registered')
       ) {
         message =
           'Ye account pehle se registered hai. Login karein.';
       }
 
       if (
-        message.toLowerCase().includes('password should be at least')
+        lower.includes('password should be at least')
       ) {
         message =
           'Password kam az kam 6 characters ka hona chahiye.';
@@ -213,10 +485,169 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     }
   };
 
+  /*
+   * -----------------------------------------
+   * VERIFICATION SCREEN
+   * -----------------------------------------
+   */
+
+  if (verificationMode) {
+    return (
+      <div className="min-h-screen bg-[#fdfbf7] flex flex-col justify-between p-4 md:p-6 max-w-md mx-auto text-stone-800 border-x border-stone-200">
+
+        <header className="flex items-center gap-2.5 py-2 border-b border-stone-200/80 pb-3">
+
+          <div className="bg-[#1e3a29] text-white w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg shadow-sm">
+            🌾
+          </div>
+
+          <div>
+            <h1 className="font-serif font-bold text-base text-[#1e3a29]">
+              Digital Munshi
+            </h1>
+
+            <span className="text-[10px] text-emerald-800 font-medium">
+              Account Verification
+            </span>
+          </div>
+
+        </header>
+
+        <main className="my-auto py-8">
+
+          <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-xl">
+
+            <div className="text-center">
+
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-50 flex items-center justify-center text-3xl mb-4">
+                {verificationMode === 'email'
+                  ? '📧'
+                  : '📱'}
+              </div>
+
+              <h2 className="text-xl font-serif font-bold text-[#1e3a29]">
+                Verify Your Account
+              </h2>
+
+              <p className="text-sm text-stone-600 mt-2 leading-relaxed">
+
+                {verificationMode === 'email'
+                  ? 'Aap ke email par 6 digit verification code bheja gaya hai.'
+                  : 'Aap ke mobile number par 6 digit verification code bheja gaya hai.'}
+
+              </p>
+
+              <p className="text-xs font-semibold text-[#1e3a29] mt-2 break-all">
+                {registeredContact}
+              </p>
+
+            </div>
+
+            {errorMsg && (
+              <div className="mt-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-xl font-medium">
+                {errorMsg}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleVerifyCode}
+              className="mt-5 space-y-4"
+            >
+
+              <div>
+
+                <label className="text-[10px] text-stone-600 font-bold block mb-1.5">
+                  VERIFICATION CODE
+                </label>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  autoFocus
+                  required
+                  value={verificationCode}
+                  onChange={(e) =>
+                    setVerificationCode(
+                      e.target.value.replace(/\D/g, '')
+                    )
+                  }
+                  placeholder="123456"
+                  className="w-full p-4 text-center text-xl tracking-[0.5em] font-bold border border-stone-300 rounded-xl focus:outline-none focus:border-[#1e3a29]"
+                />
+
+              </div>
+
+              <button
+                type="submit"
+                disabled={
+                  loading ||
+                  verificationCode.length !== 6
+                }
+                className="w-full bg-[#1e3a29] text-white py-3.5 rounded-xl font-bold text-xs shadow-md hover:bg-[#162c1f] transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading
+                  ? 'Verifying...'
+                  : 'Verify & Continue'}
+              </button>
+
+            </form>
+
+            <div className="text-center mt-5">
+
+              <p className="text-[11px] text-stone-500 mb-2">
+                Code nahi mila?
+              </p>
+
+              <button
+                type="button"
+                disabled={resending}
+                onClick={resendCode}
+                className="text-xs font-bold text-[#1e3a29] hover:underline disabled:opacity-50"
+              >
+                {resending
+                  ? 'Sending...'
+                  : 'Resend Verification Code'}
+              </button>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setVerificationMode(null);
+                setAuthMode('register');
+                setVerificationCode('');
+                setErrorMsg('');
+              }}
+              className="w-full mt-5 pt-4 border-t border-stone-100 text-xs text-stone-500 hover:text-[#1e3a29]"
+            >
+              ← Back to Register
+            </button>
+
+          </div>
+
+        </main>
+
+        <footer className="text-center text-[10px] text-stone-400 border-t border-stone-200/80 pt-3">
+          🔒 100% Secure & Encrypted Data
+        </footer>
+
+      </div>
+    );
+  }
+
+  /*
+   * -----------------------------------------
+   * NORMAL LANDING PAGE
+   * -----------------------------------------
+   */
+
   return (
     <div className="min-h-screen bg-[#fdfbf7] flex flex-col justify-between p-4 md:p-6 max-w-md mx-auto text-stone-800 border-x border-stone-200">
 
-      {/* TOP HEADER */}
+      {/* HEADER */}
+
       <header className="flex justify-between items-center py-2 border-b border-stone-200/80 pb-3">
 
         <div className="flex items-center gap-2.5">
@@ -226,6 +657,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
           </div>
 
           <div>
+
             <h1 className="font-serif font-bold text-base text-[#1e3a29] leading-none">
               Digital Munshi
             </h1>
@@ -233,6 +665,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             <span className="text-[10px] text-emerald-800 font-medium">
               Haji Noor Kissan
             </span>
+
           </div>
 
         </div>
@@ -248,9 +681,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             className="text-xs font-bold text-[#1e3a29] px-3 py-1.5 rounded-lg border border-[#1e3a29]/30 hover:bg-emerald-50 transition text-center"
           >
             Login
+
             <span className="text-[9px] opacity-75 font-normal block -mt-0.5 font-serif">
               لاگ ان
             </span>
+
           </button>
 
           <button
@@ -258,46 +693,49 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               setErrorMsg('');
               setPassword('');
               setFullName('');
+              setEmail('');
               setAuthMode('register');
             }}
             className="text-xs font-bold bg-[#1e3a29] text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-[#162c1f] transition text-center"
           >
             Register
+
             <span className="text-[9px] opacity-75 font-normal block -mt-0.5 font-serif">
               رجسٹر
             </span>
+
           </button>
 
         </div>
+
       </header>
 
-      {/* AUTH AREA */}
+      {/* AUTH */}
+
       {authMode ? (
 
         <div className="my-auto py-4">
 
           <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-xl space-y-4">
 
-            {/* MODAL HEADER */}
             <div className="flex justify-between items-center border-b pb-3">
 
               <div>
 
                 <h3 className="text-lg font-serif font-bold text-[#1e3a29]">
-                  {authMode === 'login' && 'Login to Account'}
-                  {authMode === 'register' && 'Create New Account'}
-                  {authMode === 'forgot' && 'Reset Password'}
+
+                  {authMode === 'login'
+                    ? 'Login to Account'
+                    : 'Create New Account'}
+
                 </h3>
 
                 <p className="text-[11px] text-stone-500 font-serif">
-                  {authMode === 'login' &&
-                    'اپنے اکاؤنٹ میں داخل ہوں'}
 
-                  {authMode === 'register' &&
-                    'نیا اکاؤنٹ بنائیں'}
+                  {authMode === 'login'
+                    ? 'اپنے اکاؤنٹ میں داخل ہوں'
+                    : 'نیا اکاؤنٹ بنائیں'}
 
-                  {authMode === 'forgot' &&
-                    'پاس ورڈ ری سیٹ کریں'}
                 </p>
 
               </div>
@@ -314,20 +752,19 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
             </div>
 
-            {/* ERROR */}
             {errorMsg && (
               <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2.5 rounded-xl font-medium">
                 {errorMsg}
               </div>
             )}
 
-            {/* FORM */}
             <form
               onSubmit={handleAuth}
               className="space-y-3.5 pt-1"
             >
 
-              {/* FULL NAME */}
+              {/* NAME */}
+
               {authMode === 'register' && (
                 <div>
 
@@ -353,15 +790,19 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 </div>
               )}
 
-              {/* MOBILE / EMAIL */}
+              {/* EMAIL / PHONE */}
+
               <div>
 
                 <label className="text-[10px] text-stone-600 font-bold block mb-1">
+
                   MOBILE / EMAIL
+
                   <span className="font-normal text-stone-400 font-serif">
                     {' '}
                     (موبائل نمبر یا ای میل)
                   </span>
+
                 </label>
 
                 <input
@@ -371,103 +812,128 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                   onChange={(e) =>
                     setEmail(e.target.value)
                   }
-                  placeholder="03001234567"
-                  autoComplete={
-                    authMode === 'login'
-                      ? 'username'
-                      : 'email'
-                  }
+                  placeholder="03001234567 or example@gmail.com"
                   className="w-full p-3 text-xs border border-stone-300 rounded-xl focus:outline-none focus:border-[#1e3a29]"
                 />
+
+                {authMode === 'register' && (
+                  <p className="text-[9px] text-stone-500 mt-1.5">
+                    Email denge to verification code Gmail par aayega.
+                    Mobile number denge to SMS code aayega.
+                  </p>
+                )}
 
               </div>
 
               {/* PASSWORD */}
-              {authMode !== 'forgot' && (
-                <div>
 
-                  <div className="flex justify-between items-center mb-1">
+              <div>
 
-                    <label className="text-[10px] text-stone-600 font-bold">
-                      PASSWORD
-                      <span className="font-normal text-stone-400 font-serif">
-                        {' '}
-                        (پاس ورڈ)
-                      </span>
-                    </label>
+                <div className="flex justify-between items-center mb-1">
 
-                    {authMode === 'login' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setErrorMsg('');
-                          setAuthMode('forgot');
-                        }}
-                        className="text-[11px] text-emerald-800 font-semibold hover:underline flex items-center gap-1"
-                      >
-                        <span>
-                          Forgot Password?
-                        </span>
+                  <label className="text-[10px] text-stone-600 font-bold">
 
-                        <span className="font-serif text-[9px] opacity-80">
-                          (پاس ورڈ بھول گئے؟)
-                        </span>
-                      </button>
-                    )}
+                    PASSWORD
 
-                  </div>
+                    <span className="font-normal text-stone-400 font-serif">
+                      {' '}
+                      (پاس ورڈ)
+                    </span>
 
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
-                    placeholder="••••••••"
-                    autoComplete={
-                      authMode === 'login'
-                        ? 'current-password'
-                        : 'new-password'
-                    }
-                    className="w-full p-3 text-xs border border-stone-300 rounded-xl focus:outline-none focus:border-[#1e3a29]"
-                  />
+                  </label>
+
+                  {authMode === 'login' && (
+                    <button
+                      type="button"
+                      className="text-[10px] text-emerald-800 font-semibold hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  )}
 
                 </div>
-              )}
+
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={password}
+                  onChange={(e) =>
+                    setPassword(e.target.value)
+                  }
+                  placeholder="Example: Munshi@123"
+                  autoComplete={
+                    authMode === 'login'
+                      ? 'current-password'
+                      : 'new-password'
+                  }
+                  className="w-full p-3 text-xs border border-stone-300 rounded-xl focus:outline-none focus:border-[#1e3a29]"
+                />
+
+                {/* PASSWORD INSTRUCTIONS */}
+
+                {authMode === 'register' && (
+                  <div className="mt-2 bg-emerald-50 border border-emerald-100 rounded-xl p-3">
+
+                    <p className="text-[10px] font-bold text-emerald-900 mb-1.5">
+                      🔐 Password kesa hona chahiye?
+                    </p>
+
+                    <div className="space-y-1 text-[9px] text-emerald-800">
+
+                      <p>
+                        ✓ Kam az kam 6 characters
+                      </p>
+
+                      <p>
+                        ✓ 1 Capital letter — A, B, C
+                      </p>
+
+                      <p>
+                        ✓ 1 Small letter — a, b, c
+                      </p>
+
+                      <p>
+                        ✓ 1 Number — 1, 2, 3
+                      </p>
+
+                      <p className="font-semibold pt-1">
+                        Example: Munshi@123
+                      </p>
+
+                    </div>
+
+                  </div>
+                )}
+
+              </div>
 
               {/* SUBMIT */}
+
               <button
                 type="submit"
                 disabled={loading}
                 className="w-full bg-[#1e3a29] text-white py-3.5 rounded-xl font-bold text-xs shadow-md mt-2 hover:bg-[#162c1f] transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
 
-                {loading ? (
-                  'Processing...'
-                ) : (
-                  <>
-                    {authMode === 'login' &&
-                      'Login Now'}
-
-                    {authMode === 'register' &&
-                      'Create Account Now'}
-
-                    {authMode === 'forgot' &&
-                      'Send Reset Link'}
-                  </>
-                )}
+                {loading
+                  ? 'Processing...'
+                  : authMode === 'login'
+                    ? 'Login Now'
+                    : 'Create Account & Get Code'}
 
               </button>
 
             </form>
 
-            {/* BOTTOM SWITCH LINKS */}
+            {/* SWITCH */}
+
             <div className="text-center pt-2 border-t border-stone-100 text-xs">
 
-              {authMode === 'login' && (
+              {authMode === 'login' ? (
+
                 <div>
+
                   <span className="text-stone-500">
                     Don't have an account?{' '}
                   </span>
@@ -478,21 +944,18 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                       setErrorMsg('');
                       setPassword('');
                       setFullName('');
+                      setEmail('');
                       setAuthMode('register');
                     }}
                     className="font-bold text-[#1e3a29] hover:underline"
                   >
                     Register
-                    <span className="font-serif text-[10px] font-normal">
-                      {' '}
-                      (نیا اکاؤنٹ بنائیں)
-                    </span>
                   </button>
-                </div>
-              )}
 
-              {(authMode === 'register' ||
-                authMode === 'forgot') && (
+                </div>
+
+              ) : (
+
                 <div>
 
                   <span className="text-stone-500">
@@ -503,18 +966,16 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                     type="button"
                     onClick={() => {
                       setErrorMsg('');
+                      setPassword('');
                       setAuthMode('login');
                     }}
                     className="font-bold text-[#1e3a29] hover:underline"
                   >
                     Login
-                    <span className="font-serif text-[10px] font-normal">
-                      {' '}
-                      (لاگ ان کریں)
-                    </span>
                   </button>
 
                 </div>
+
               )}
 
             </div>
@@ -525,10 +986,10 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
       ) : (
 
-        /* LANDING PAGE */
+        /* LANDING HERO */
+
         <main className="my-auto py-6 space-y-6">
 
-          {/* HERO */}
           <div className="text-center space-y-3">
 
             <span className="inline-flex items-center gap-1.5 bg-amber-100 text-amber-900 text-[11px] font-semibold px-3 py-1 rounded-full border border-amber-200">
@@ -538,9 +999,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             <h2 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 leading-snug">
               Poori Zameendari Ka Hisaab,
               <br />
+
               <span className="text-[#1e3a29] underline decoration-amber-400">
                 Ek Hi Kitaab Mein
               </span>
+
             </h2>
 
             <p className="text-emerald-800 font-serif text-base font-semibold">
@@ -552,7 +1015,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               aur Tractor ka hisaab — ab mobile me mehfooz.
             </p>
 
-            {/* ACTION BUTTONS */}
             <div className="pt-2 flex flex-col gap-2.5 max-w-xs mx-auto">
 
               <button
@@ -578,13 +1040,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 }}
                 className="w-full bg-white border border-stone-300 text-stone-700 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
               >
-                <span>
-                  Already Have Account? Login
-                </span>
-
-                <span className="text-[10px] opacity-70 font-normal font-serif">
-                  لاگ ان کریں
-                </span>
+                Already Have Account? Login
               </button>
 
             </div>
@@ -592,19 +1048,22 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
           </div>
 
           {/* FEATURES */}
+
           <div className="space-y-3 pt-2">
 
             <h3 className="text-[11px] font-bold text-stone-500 uppercase tracking-wider text-center flex items-center justify-center gap-2">
+
               <span className="h-[1px] w-8 bg-stone-300"></span>
 
               Is App Me Kya Features Hain?
 
               <span className="h-[1px] w-8 bg-stone-300"></span>
+
             </h3>
 
             <div className="grid grid-cols-2 gap-2.5">
 
-              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-1">
+              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
                 <div className="text-emerald-800 text-lg">
                   🚜
                 </div>
@@ -618,7 +1077,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 </p>
               </div>
 
-              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-1">
+              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
                 <div className="text-emerald-800 text-lg">
                   🏪
                 </div>
@@ -628,11 +1087,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 </h4>
 
                 <p className="text-[10px] text-stone-500 leading-tight">
-                  Godaam me kitna maal aaya aur kisaan ko kitna mila.
+                  Godaam ka complete stock record.
                 </p>
               </div>
 
-              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-1">
+              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
                 <div className="text-emerald-800 text-lg">
                   🔒
                 </div>
@@ -642,11 +1101,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 </h4>
 
                 <p className="text-[10px] text-stone-500 leading-tight">
-                  Cash In aur Cash Out ka daily safey-war hisaab.
+                  Cash In aur Cash Out ka complete hisaab.
                 </p>
               </div>
 
-              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm space-y-1">
+              <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
                 <div className="text-emerald-800 text-lg">
                   📜
                 </div>
@@ -656,17 +1115,20 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 </h4>
 
                 <p className="text-[10px] text-stone-500 leading-tight">
-                  Data online cloud database par hamesha safe.
+                  Data cloud database par safe.
                 </p>
               </div>
 
             </div>
+
           </div>
 
         </main>
+
       )}
 
       {/* FOOTER */}
+
       <footer className="text-center text-[10px] text-stone-400 space-y-1 border-t border-stone-200/80 pt-3">
 
         <p>
@@ -676,7 +1138,9 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
         <div className="flex justify-center gap-3 pt-0.5 text-stone-500 font-medium">
 
           <button
-            onClick={() => onOpenPolicy('privacy')}
+            onClick={() =>
+              onOpenPolicy('privacy')
+            }
             className="hover:underline"
           >
             Privacy Policy
@@ -685,7 +1149,9 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
           <span>•</span>
 
           <button
-            onClick={() => onOpenPolicy('terms')}
+            onClick={() =>
+              onOpenPolicy('terms')
+            }
             className="hover:underline"
           >
             Terms of Service
