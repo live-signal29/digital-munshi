@@ -39,9 +39,13 @@ export default function KisaanDetail() {
   }, [selectedKisaanId]);
 
   async function fetchKisaans() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const { data, error } = await supabase
       .from('kisaans')
       .select('*')
+      .eq('user_id', user.id)
       .eq('category', 'kisaan')
       .order('created_at', { ascending: false });
 
@@ -62,10 +66,17 @@ export default function KisaanDetail() {
 
   async function fetchEntries(kisaanId) {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('kisaan_items')
       .select('*')
       .eq('kisaan_id', kisaanId)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -83,6 +94,9 @@ export default function KisaanDetail() {
     e.preventDefault();
     if (!newKisaanForm.name.trim()) return alert('Kisaan ka naam likhna zaroori hai');
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const acreValue = parseFloat(newKisaanForm.zameen_acre) || 0;
 
     const { data, error } = await supabase
@@ -92,6 +106,7 @@ export default function KisaanDetail() {
           name: newKisaanForm.name.trim(),
           zameen_acre: acreValue,
           category: 'kisaan',
+          user_id: user.id
         },
       ])
       .select();
@@ -113,6 +128,9 @@ export default function KisaanDetail() {
     if (!selectedKisaanId) return alert('Pehle Kisaan select karein');
     if (!form.item_name.trim()) return alert('Item name likhna zaroori hai');
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const finalUnit = form.unit === 'Custom' ? form.custom_unit.trim() || 'Unit' : form.unit;
     const qty = parseFloat(form.quantity) || 0;
     const rate = parseFloat(form.rate) || 0;
@@ -125,13 +143,15 @@ export default function KisaanDetail() {
       rate: rate,
       total_amount: total,
       type: form.type,
+      user_id: user.id
     };
 
     if (editingEntryId) {
       const { error } = await supabase
         .from('kisaan_items')
         .update(entryData)
-        .eq('id', editingEntryId);
+        .eq('id', editingEntryId)
+        .eq('user_id', user.id);
 
       if (error) {
         console.error('Update Entry Error:', error);
@@ -183,7 +203,15 @@ export default function KisaanDetail() {
 
   async function handleDeleteEntry(id) {
     if (window.confirm('Kya aap is entry ko delete karna chahte hain?')) {
-      const { error } = await supabase.from('kisaan_items').delete().eq('id', id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('kisaan_items')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
       if (error) {
         console.error('Delete Entry Error:', error);
         alert('Error deleting: ' + error.message);
@@ -195,6 +223,9 @@ export default function KisaanDetail() {
 
   async function handleUpdateKisaan(e) {
     e.preventDefault();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
     const acreValue = parseFloat(kisaanEditForm.zameen_acre) || 0;
 
     const { error } = await supabase
@@ -203,7 +234,8 @@ export default function KisaanDetail() {
         name: kisaanEditForm.name.trim(),
         zameen_acre: acreValue,
       })
-      .eq('id', selectedKisaanId);
+      .eq('id', selectedKisaanId)
+      .eq('user_id', user.id);
 
     if (error) {
       console.error('Kisaan Update Error:', error);
@@ -240,7 +272,6 @@ export default function KisaanDetail() {
     ...itemBreakdown[name],
   }));
 
-  // Direct CSV Export (Opens natively in Excel without needing external 'xlsx' library)
   function exportToCSV() {
     if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
     const headers = ['Item Name', 'Type', 'Quantity', 'Unit', 'Rate', 'Total Amount'];
@@ -265,7 +296,6 @@ export default function KisaanDetail() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Naya Kisaan Add Karein */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">➕ Naya Kisaan Add Karein</h3>
@@ -306,7 +336,6 @@ export default function KisaanDetail() {
         )}
       </div>
 
-      {/* Kisaan Selector */}
       <div className="flex gap-2 items-center">
         <select
           value={selectedKisaanId}
@@ -322,7 +351,6 @@ export default function KisaanDetail() {
         </select>
       </div>
 
-      {/* Kisaan Profile Card */}
       {selectedKisaan && (
         <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-2">
           {isEditingKisaan ? (
@@ -388,7 +416,6 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Mini Dashboard - Summary Row */}
       {selectedKisaan && (
         <div className="grid grid-cols-4 gap-1.5">
           <div className="bg-white p-2 rounded-xl border border-stone-200 shadow-sm text-center">
@@ -412,7 +439,6 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Item Wise Breakdown */}
       {selectedKisaan && itemBreakdownList.length > 0 && (
         <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
           <h4 className="text-[10px] font-bold text-stone-600 uppercase mb-2">📦 Item Wise Khulasa</h4>
@@ -437,7 +463,6 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Entry Form */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -534,7 +559,6 @@ export default function KisaanDetail() {
         )}
       </div>
 
-      {/* Khata Entries List */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Khata Entries</h3>
