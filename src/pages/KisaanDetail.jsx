@@ -11,6 +11,10 @@ export default function KisaanDetail() {
   const [kisaanEditForm, setKisaanEditForm] = useState({ name: '', zameen_acre: '' });
   const [editingEntryId, setEditingEntryId] = useState(null);
 
+  // Naya Kisaan Add Karne Ke Liye State
+  const [showAddKisaan, setShowAddKisaan] = useState(false);
+  const [newKisaanForm, setNewKisaanForm] = useState({ name: '', zameen_acre: '' });
+
   const [form, setForm] = useState({
     type: 'kharch',
     item_name: '',
@@ -71,6 +75,34 @@ export default function KisaanDetail() {
   }
 
   const selectedKisaan = kisaans.find((k) => k.id === selectedKisaanId);
+
+  // Naya Kisaan Save Karna
+  async function handleAddKisaan(e) {
+    e.preventDefault();
+    if (!newKisaanForm.name) return alert('Kisaan ka naam likhna zaroori hai');
+
+    const { data, error } = await supabase
+      .from('kisaans')
+      .insert([
+        {
+          name: newKisaanForm.name,
+          zameen_acre: newKisaanForm.zameen_acre || 0,
+          category: 'kisaan',
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error('Add Kisaan Error:', error);
+      alert('Error adding kisaan: ' + error.message);
+      return;
+    }
+
+    setNewKisaanForm({ name: '', zameen_acre: '' });
+    setShowAddKisaan(false);
+    await fetchKisaans();
+    if (data && data[0]) setSelectedKisaanId(data[0].id);
+  }
 
   async function handleSaveEntry(e) {
     e.preventDefault();
@@ -181,6 +213,46 @@ export default function KisaanDetail() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
+      {/* Naya Kisaan Add Karein Button + Form */}
+      <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-xs text-[#1e3a29]">➕ Naya Kisaan Add Karein</h3>
+          <button
+            type="button"
+            onClick={() => setShowAddKisaan(!showAddKisaan)}
+            className="text-[10px] font-bold text-emerald-700 hover:underline"
+          >
+            {showAddKisaan ? 'Band Karein' : 'Naya Kisaan +'}
+          </button>
+        </div>
+
+        {showAddKisaan && (
+          <form onSubmit={handleAddKisaan} className="space-y-2 pt-3">
+            <input
+              type="text"
+              placeholder="Kisaan Name *"
+              value={newKisaanForm.name}
+              onChange={(e) => setNewKisaanForm({ ...newKisaanForm, name: e.target.value })}
+              required
+              className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
+            />
+            <input
+              type="text"
+              placeholder="Zameen Acre (optional)"
+              value={newKisaanForm.zameen_acre}
+              onChange={(e) => setNewKisaanForm({ ...newKisaanForm, zameen_acre: e.target.value })}
+              className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="w-full py-2.5 bg-[#1e3a29] text-white text-xs font-bold rounded-xl shadow-md hover:bg-[#162c1f]"
+            >
+              Kisaan Save Karein
+            </button>
+          </form>
+        )}
+      </div>
+
       <div className="flex gap-2 items-center">
         <select
           value={selectedKisaanId}
