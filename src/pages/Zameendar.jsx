@@ -24,8 +24,6 @@ export default function Zameendar() {
 
   async function fetchKisaans() {
     setLoading(true);
-
-    // 🔑 Get logged-in user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setLoading(false);
@@ -35,7 +33,7 @@ export default function Zameendar() {
     const { data, error } = await supabase
       .from('kisaans')
       .select('*')
-      .eq('user_id', user.id) // 👈 Filter by user_id
+      .eq('user_id', user.id)
       .eq('category', 'zameendar')
       .order('created_at', { ascending: false });
 
@@ -51,7 +49,6 @@ export default function Zameendar() {
     e.preventDefault();
     if (!form.name.trim()) return alert("Zameendar / Kisaan ka naam likhna zaroori hai");
 
-    // 🔑 Get logged-in user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return alert("User session nahi mila, dobara login karein.");
 
@@ -63,7 +60,7 @@ export default function Zameendar() {
       amount: form.amount ? parseFloat(form.amount) : 0,
       notes: form.notes.trim() || '',
       category: 'zameendar',
-      user_id: user.id // 👈 Attach user_id
+      user_id: user.id
     };
 
     if (editingId) {
@@ -71,7 +68,7 @@ export default function Zameendar() {
         .from('kisaans')
         .update(payload)
         .eq('id', editingId)
-        .eq('user_id', user.id); // 👈 Extra safety check
+        .eq('user_id', user.id);
 
       if (!error) {
         setEditingId(null);
@@ -119,23 +116,20 @@ export default function Zameendar() {
         .from('kisaans')
         .delete()
         .eq('id', id)
-        .eq('user_id', user.id); // 👈 Secure delete
+        .eq('user_id', user.id);
 
       if (!error) fetchKisaans();
       else alert("Error deleting: " + error.message);
     }
   }
 
-  // Calculations for Summary Dashboard
   const totalKharcha = kisaans.reduce((sum, k) => sum + (Number(k.amount) || 0), 0);
   
-  // Filtered List based on Active Tab
   const filteredKisaans = kisaans.filter(k => {
     if (activeTab === 'all') return true;
     return k.kharcha_type === activeTab;
   });
 
-  // Export to CSV Function
   function exportToCSV() {
     if (!kisaans.length) return alert('Export karne ke liye koi record nahi hai');
     const headers = ['Tareekh', 'Naam', 'Phone', 'Raqba (Area)', 'Kharcha Type', 'Amount (Rs)', 'Notes'];
@@ -161,7 +155,6 @@ export default function Zameendar() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Header Summary Card */}
       <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
         <div className="flex justify-between items-center">
           <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -185,7 +178,6 @@ export default function Zameendar() {
         </div>
       </div>
 
-      {/* Mini Stats Summary */}
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-sm text-center">
           <p className="text-[8px] text-stone-500 font-bold uppercase">Kul Indraj</p>
@@ -201,7 +193,6 @@ export default function Zameendar() {
         </div>
       </div>
 
-      {/* Entry Form Toggle & Container */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -298,7 +289,6 @@ export default function Zameendar() {
         )}
       </div>
 
-      {/* Filter Tabs by Kharcha Type */}
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl text-[10px] font-bold overflow-x-auto">
         <button
           onClick={() => setActiveTab('all')}
@@ -342,7 +332,6 @@ export default function Zameendar() {
         </button>
       </div>
 
-      {/* Records History Section */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Mawjooda Zameendar Khata</h3>
