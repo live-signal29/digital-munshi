@@ -36,7 +36,7 @@ export default function Tijori() {
   async function handleSaveCash(e) {
     e.preventDefault();
     const parsedAmount = parseFloat(form.amount);
-    if (!parsedAmount || parsedAmount <= 0) {
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return alert("Baraye karam durust Amount (Rs) likhein");
     }
 
@@ -48,7 +48,11 @@ export default function Tijori() {
 
     if (editingId) {
       // Edit Transaction Entry
-      const { error } = await supabase.from('tijori_cash').update(payload).eq('id', editingId);
+      const { error } = await supabase
+        .from('tijori_cash')
+        .update(payload)
+        .eq('id', editingId);
+
       if (!error) {
         setEditingId(null);
         resetForm();
@@ -79,7 +83,7 @@ export default function Tijori() {
     setShowForm(true);
     setForm({
       direction: item.direction || 'in',
-      amount: item.amount || '',
+      amount: item.amount ?? '',
       source: item.source || ''
     });
   }
@@ -110,7 +114,7 @@ export default function Tijori() {
     const rows = entries.map((e) => [
       `"${new Date(e.created_at).toLocaleDateString()}"`,
       e.direction === 'in' ? '"Cash In (+)"' : '"Cash Out (-)"',
-      `"${e.source || 'Cash Entry'}"`,
+      `"${(e.source || 'Cash Entry').replace(/"/g, '""')}"`,
       e.amount || 0
     ]);
     const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.map((r) => r.join(',')).join('\n');
@@ -180,13 +184,9 @@ export default function Tijori() {
           <button 
             type="button" 
             onClick={() => { 
-              if (editingId) {
-                setEditingId(null);
-                resetForm();
-                setShowForm(false);
-              } else {
-                setShowForm(!showForm);
-              }
+              setEditingId(null);
+              resetForm();
+              setShowForm(!showForm);
             }} 
             className="text-[10px] font-bold text-emerald-700 hover:underline"
           >
@@ -226,7 +226,7 @@ export default function Tijori() {
               step="any"
               placeholder="Amount (Rs) *" 
               value={form.amount} 
-              onChange={e => setForm({...form, amount: e.target.value})} 
+              onChange={e => setForm({ ...form, amount: e.target.value })} 
               required 
               className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none" 
             />
@@ -235,7 +235,7 @@ export default function Tijori() {
               type="text" 
               placeholder="Source / Tafseel (e.g. Fasal Ki Kamai / Bank Withdrawal)" 
               value={form.source} 
-              onChange={e => setForm({...form, source: e.target.value})} 
+              onChange={e => setForm({ ...form, source: e.target.value })} 
               className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none" 
             />
 
@@ -289,7 +289,7 @@ export default function Tijori() {
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${
+                        <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${
                           isIn ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                         }`}>
                           {isIn ? 'CASH IN' : 'CASH OUT'}
