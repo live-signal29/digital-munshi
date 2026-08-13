@@ -21,8 +21,11 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      // 1. Kisaans Count
-      const { data: kisaans, error: kisaanErr } = await supabase.from('kisaans').select('id');
+      // 1. Kisaans Count (sirf category = 'kisaan' wale, Zameendar exclude)
+      const { data: kisaans, error: kisaanErr } = await supabase
+        .from('kisaans')
+        .select('id')
+        .eq('category', 'kisaan');
       if (kisaanErr) console.error("Kisaan Fetch Error:", kisaanErr);
 
       // 2. Tijori Data
