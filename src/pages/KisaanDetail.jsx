@@ -35,7 +35,12 @@ export default function KisaanDetail() {
   }, [selectedKisaanId]);
 
   async function fetchKisaans() {
-    const { data } = await supabase.from('kisaans').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('kisaans').select('*').order('created_at', { ascending: false });
+    if (error) {
+      console.error('Fetch Kisaans Error:', error);
+      alert('Error loading kisaans: ' + error.message);
+      return;
+    }
     if (data && data.length > 0) {
       setKisaans(data);
       if (!selectedKisaanId) setSelectedKisaanId(data[0].id);
@@ -44,11 +49,17 @@ export default function KisaanDetail() {
 
   async function fetchEntries(kisaanId) {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('kisaan_items')
       .select('*')
       .eq('kisaan_id', kisaanId)
       .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Fetch Entries Error:', error);
+      alert('Error loading entries: ' + error.message);
+    }
+
     setEntries(data || []);
     setLoading(false);
   }
@@ -81,11 +92,15 @@ export default function KisaanDetail() {
         })
         .eq('id', editingEntryId);
 
-      if (!error) {
-        setEditingEntryId(null);
-        resetForm();
-        fetchEntries(selectedKisaanId);
+      if (error) {
+        console.error('Update Entry Error:', error);
+        alert('Error updating: ' + error.message);
+        return;
       }
+
+      setEditingEntryId(null);
+      resetForm();
+      fetchEntries(selectedKisaanId);
     } else {
       // New Entry
       const { error } = await supabase.from('kisaan_items').insert([
@@ -100,10 +115,14 @@ export default function KisaanDetail() {
         },
       ]);
 
-      if (!error) {
-        resetForm();
-        fetchEntries(selectedKisaanId);
+      if (error) {
+        console.error('Insert Entry Error:', error);
+        alert('Error adding entry: ' + error.message);
+        return;
       }
+
+      resetForm();
+      fetchEntries(selectedKisaanId);
     }
   }
 
@@ -129,7 +148,12 @@ export default function KisaanDetail() {
   async function handleDeleteEntry(id) {
     if (window.confirm('Kya aap is entry ko delete karna chahte hain?')) {
       const { error } = await supabase.from('kisaan_items').delete().eq('id', id);
-      if (!error) fetchEntries(selectedKisaanId);
+      if (error) {
+        console.error('Delete Entry Error:', error);
+        alert('Error deleting: ' + error.message);
+        return;
+      }
+      fetchEntries(selectedKisaanId);
     }
   }
 
@@ -144,10 +168,14 @@ export default function KisaanDetail() {
       })
       .eq('id', selectedKisaanId);
 
-    if (!error) {
-      setIsEditingKisaan(false);
-      fetchKisaans();
+    if (error) {
+      console.error('Kisaan Update Error:', error);
+      alert('Error updating kisaan: ' + error.message);
+      return;
     }
+
+    setIsEditingKisaan(false);
+    fetchKisaans();
   }
 
   const totalKharch = entries.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
