@@ -35,9 +35,12 @@ export default function KhataBook() {
     e.preventDefault();
     if (!form.title.trim()) return alert("Unwan / Title likhna zaroori hai");
 
+    const rawAmount = parseFloat(form.amount);
+    const amountVal = isNaN(rawAmount) ? 0 : rawAmount;
+
     const payload = {
       title: form.title.trim(),
-      amount: parseFloat(form.amount || 0),
+      amount: amountVal,
       type: form.type,
       notes: form.notes.trim()
     };
@@ -117,10 +120,10 @@ export default function KhataBook() {
     const headers = ['Tareekh', 'Unwan / Title', 'Kisam (Type)', 'Amount (Rs)', 'Notes'];
     const rows = entries.map((e) => [
       `"${new Date(e.created_at).toLocaleDateString()}"`,
-      `"${e.title || ''}"`,
-      `"${e.type.toUpperCase()}"`,
+      `"${(e.title || '').replace(/"/g, '""')}"`,
+      `"${(e.type || '').toUpperCase()}"`,
       e.amount || 0,
-      `"${e.notes || ''}"`
+      `"${(e.notes || '').replace(/"/g, '""')}"`
     ]);
     const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.map((r) => r.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -190,13 +193,9 @@ export default function KhataBook() {
           <button 
             type="button" 
             onClick={() => {
-              if (editingId) {
-                setEditingId(null);
-                resetForm();
-                setShowForm(false);
-              } else {
-                setShowForm(!showForm);
-              }
+              setEditingId(null);
+              resetForm();
+              setShowForm(!showForm);
             }} 
             className="text-[10px] font-bold text-emerald-700 hover:underline"
           >
