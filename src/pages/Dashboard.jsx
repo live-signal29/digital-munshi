@@ -21,30 +21,50 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      // 1. Kisaans Count (sirf category = 'kisaan' wale, Zameendar exclude)
+      // 🔑 Get current logged-in user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // 1. Kisaans Count (Filtered by user_id)
       const { data: kisaans, error: kisaanErr } = await supabase
         .from('kisaans')
         .select('id')
+        .eq('user_id', user.id)
         .eq('category', 'kisaan');
       if (kisaanErr) console.error("Kisaan Fetch Error:", kisaanErr);
 
-      // 2. Tijori Data
-      const { data: tijori, error: tijoriErr } = await supabase.from('tijori_cash').select('*');
+      // 2. Tijori Data (Filtered by user_id)
+      const { data: tijori, error: tijoriErr } = await supabase
+        .from('tijori_cash')
+        .select('*')
+        .eq('user_id', user.id);
       if (tijoriErr) console.error("Tijori Fetch Error:", tijoriErr);
 
       const tIn = tijori?.filter(t => t.direction === 'in').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
       const tOut = tijori?.filter(t => t.direction === 'out').reduce((s, t) => s + Number(t.amount || 0), 0) || 0;
 
-      // 3. KhataBook Count
-      const { data: khata, error: khataErr } = await supabase.from('khata_book').select('id');
+      // 3. KhataBook Count (Filtered by user_id)
+      const { data: khata, error: khataErr } = await supabase
+        .from('khata_book')
+        .select('id')
+        .eq('user_id', user.id);
       if (khataErr) console.error("Khata Fetch Error:", khataErr);
 
-      // 4. Godaam Stock Data
-      const { data: godaam, error: godaamErr } = await supabase.from('godaam_stock').select('*');
+      // 4. Godaam Stock Data (Filtered by user_id)
+      const { data: godaam, error: godaamErr } = await supabase
+        .from('godaam_stock')
+        .select('*')
+        .eq('user_id', user.id);
       if (godaamErr) console.error("Godaam Fetch Error:", godaamErr);
 
-      // 5. Kisaan Issued Items Data
-      const { data: kisaanItems, error: entriesErr } = await supabase.from('kisaan_items').select('*');
+      // 5. Kisaan Issued Items Data (Filtered by user_id)
+      const { data: kisaanItems, error: entriesErr } = await supabase
+        .from('kisaan_items')
+        .select('*')
+        .eq('user_id', user.id);
       if (entriesErr) console.error("Kisaan Items Fetch Error:", entriesErr);
 
       // Stock In/Out Calculations
