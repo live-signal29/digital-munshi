@@ -7,9 +7,8 @@ export default function KhataBook() {
   const [editingId, setEditingId] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [hideHistory, setHideHistory] = useState(false);
-  const [activeTab, setActiveTab] = useState('all'); // 'all', 'kharch', 'aamdani', 'note'
+  const [activeTab, setActiveTab] = useState('all');
 
-  // Form State
   const [form, setForm] = useState({ title: '', amount: '', type: 'kharch', notes: '' });
 
   useEffect(() => {
@@ -18,9 +17,16 @@ export default function KhataBook() {
 
   async function fetchEntries() {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('khata_book')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -35,6 +41,9 @@ export default function KhataBook() {
     e.preventDefault();
     if (!form.title.trim()) return alert("Unwan / Title likhna zaroori hai");
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const rawAmount = parseFloat(form.amount);
     const amountVal = isNaN(rawAmount) ? 0 : rawAmount;
 
@@ -42,15 +51,16 @@ export default function KhataBook() {
       title: form.title.trim(),
       amount: amountVal,
       type: form.type,
-      notes: form.notes.trim()
+      notes: form.notes.trim(),
+      user_id: user.id
     };
 
     if (editingId) {
-      // Edit / Update Entry
       const { error } = await supabase
         .from('khata_book')
         .update(payload)
-        .eq('id', editingId);
+        .eq('id', editingId)
+        .eq('user_id', user.id);
 
       if (!error) {
         setEditingId(null);
@@ -61,7 +71,6 @@ export default function KhataBook() {
         alert("Error updating: " + error.message);
       }
     } else {
-      // Add New Entry
       const { error } = await supabase.from('khata_book').insert([payload]);
 
       if (!error) {
@@ -91,13 +100,20 @@ export default function KhataBook() {
 
   async function handleDelete(id) {
     if (window.confirm("Kya aap is khata entry ko delete karna chahte hain?")) {
-      const { error } = await supabase.from('khata_book').delete().eq('id', id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('khata_book')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
       if (!error) fetchEntries();
       else alert("Error deleting: " + error.message);
     }
   }
 
-  // Calculations for Dashboard
   const totalAamdani = entries
     .filter(e => e.type === 'aamdani')
     .reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
@@ -108,13 +124,11 @@ export default function KhataBook() {
 
   const netBalance = totalAamdani - totalKharch;
 
-  // Filtered List based on Active Tab
   const filteredEntries = entries.filter(e => {
     if (activeTab === 'all') return true;
     return e.type === activeTab;
   });
 
-  // Export to CSV Function
   function exportToCSV() {
     if (!entries.length) return alert('Export karne ke liye koi record nahi hai');
     const headers = ['Tareekh', 'Unwan / Title', 'Kisam (Type)', 'Amount (Rs)', 'Notes'];
@@ -138,7 +152,6 @@ export default function KhataBook() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Header Profile / Summary Card */}
       <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
         <div className="flex justify-between items-center">
           <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
@@ -162,7 +175,6 @@ export default function KhataBook() {
         </div>
       </div>
 
-      {/* Mini Dashboard - Stats Summary Cards */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-sm text-center">
           <p className="text-[8px] text-stone-500 font-bold uppercase">Kul Aamdani</p>
@@ -184,7 +196,6 @@ export default function KhataBook() {
         </div>
       </div>
 
-      {/* Entry Form Toggle Section */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -251,7 +262,6 @@ export default function KhataBook() {
         )}
       </div>
 
-      {/* Filter Tabs */}
       <div className="flex gap-1 bg-stone-100 p-1 rounded-xl text-[10px] font-bold">
         <button
           onClick={() => setActiveTab('all')}
@@ -287,7 +297,6 @@ export default function KhataBook() {
         </button>
       </div>
 
-      {/* History & List Section */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Khata Record History</h3>
