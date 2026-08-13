@@ -20,7 +20,7 @@ export default function Navigation({ activeTab, setActiveTab, toggleDrawer }) {
           </button>
           <div>
             <h1 className="font-serif font-bold text-base leading-none">Digital Munshi</h1>
-            <span className="text-[10px] text-emerald-200 font-medium">Haji Noor Kissan</span>
+            <span className="text-[10px] text-emerald-200 font-medium">by Aziz</span>
           </div>
         </div>
         <div className="bg-emerald-800/60 text-emerald-100 text-xs px-2.5 py-1 rounded-full border border-emerald-700/50 flex items-center gap-1.5">
