@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from './lib/supabase'; // Make sure Supabase client path is correct
+import { supabase } from './lib/supabase';
 import Navigation from './components/Navigation';
 import Drawer from './components/Drawer';
 import Dashboard from './pages/Dashboard';
@@ -14,7 +14,7 @@ import Terms from './pages/Terms';
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true); // 👈 Session check loading state
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('home');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedKisaanId, setSelectedKisaanId] = useState(null);
@@ -23,36 +23,63 @@ export default function App() {
 
   // Auto-restore login session on Refresh
   useEffect(() => {
-    // 1. Initial Load: Check saved session from Supabase
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    async function checkUserSession() {
+      // 1. Supabase Auth Session Check
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        // 2. Fallback: Local Storage Check
+        const savedUser = localStorage.getItem('munshi_user');
+        if (savedUser) {
+          try {
+            setUser(JSON.parse(savedUser));
+          } catch (e) {
+            localStorage.removeItem('munshi_user');
+          }
+        }
+      }
       setLoading(false);
-    });
+    }
 
-    // 2. Real-time Auth State Change Listener
+    checkUserSession();
+
+    // 3. Auth Listener for real-time changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      if (session?.user) {
+        setUser(session.user);
+        localStorage.setItem('munshi_user', JSON.stringify(session.user));
+      } else if (_event === 'SIGNED_OUT') {
+        setUser(null);
+        localStorage.removeItem('munshi_user');
+      }
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Logout Functionality
+  // Login Handler from LandingPage
+  const handleLogin = (userData) => {
+    setUser(userData);
+    localStorage.setItem('munshi_user', JSON.stringify(userData));
+  };
+
+  // Logout Handler
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    localStorage.removeItem('munshi_user');
     setUser(null);
     setIsDrawerOpen(false);
     setActiveTab('home');
   };
 
-  // Function to open specific Kisaan Detail
   const handleSelectKisaan = (id) => {
     setSelectedKisaanId(id);
     setActiveTab('kisaan');
   };
 
-  // Show Loading Spinner while verifying session on Refresh
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fdfbf7]">
@@ -64,15 +91,13 @@ export default function App() {
     );
   }
 
-  // Policy View Before Login or Inside App
   if (activeTab === 'privacy') return <PrivacyPolicy onBack={() => setActiveTab('home')} />;
   if (activeTab === 'terms') return <Terms onBack={() => setActiveTab('home')} />;
 
-  // Show Landing Page if not logged in
   if (!user) {
     return (
       <LandingPage 
-        onLogin={(userData) => setUser(userData)} 
+        onLogin={handleLogin} 
         onOpenPolicy={(policy) => setActiveTab(policy)} 
       />
     );
