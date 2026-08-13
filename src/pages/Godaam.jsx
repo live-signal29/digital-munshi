@@ -22,9 +22,16 @@ export default function Godaam() {
 
   async function fetchStock() {
     setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('godaam_stock')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -39,6 +46,9 @@ export default function Godaam() {
     e.preventDefault();
     if (!form.item_name.trim()) return alert('Item Name likhna zaroori hai');
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const finalUnit = form.unit === 'Custom' ? form.custom_unit.trim() || 'Unit' : form.unit;
     const qty = parseFloat(form.quantity_in) || 0;
     const rate = form.rate_per_unit ? parseFloat(form.rate_per_unit) || 0 : null;
@@ -50,13 +60,15 @@ export default function Godaam() {
       unit: finalUnit,
       rate_per_unit: rate,
       total_amount: totalAmount,
+      user_id: user.id
     };
 
     if (editingId) {
       const { error } = await supabase
         .from('godaam_stock')
         .update(payload)
-        .eq('id', editingId);
+        .eq('id', editingId)
+        .eq('user_id', user.id);
 
       if (!error) {
         setEditingId(null);
@@ -97,13 +109,20 @@ export default function Godaam() {
 
   async function handleDelete(id) {
     if (window.confirm('Kya aap is stock entry ko delete karna chahte hain?')) {
-      const { error } = await supabase.from('godaam_stock').delete().eq('id', id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('godaam_stock')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+
       if (!error) fetchStock();
       else alert('Error deleting: ' + error.message);
     }
   }
 
-  // Dashboard Calculations
   const totalStockEntries = stock.length;
   
   const totalGodaamValue = stock.reduce((sum, item) => {
@@ -115,7 +134,6 @@ export default function Godaam() {
 
   const totalQuantity = stock.reduce((sum, item) => sum + (Number(item.quantity_in) || 0), 0);
 
-  // Item Wise Breakdown
   const itemBreakdown = {};
   stock.forEach((s) => {
     const key = (s.item_name || 'Ather').trim().toUpperCase();
@@ -135,7 +153,6 @@ export default function Godaam() {
     ...itemBreakdown[name],
   }));
 
-  // CSV Export
   function exportToCSV() {
     if (!stock.length) return alert('Koi stock entry nahi hai export karne ke liye');
     const headers = ['Item Name', 'Quantity In', 'Unit', 'Rate Per Unit', 'Total Value'];
@@ -164,7 +181,6 @@ export default function Godaam() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Header Profile Card */}
       <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
         <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold">
           Inventory Management
@@ -183,7 +199,6 @@ export default function Godaam() {
         </div>
       </div>
 
-      {/* Mini Dashboard - Summary Row */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white p-2.5 rounded-xl border border-stone-200 shadow-sm text-center">
           <p className="text-[8px] text-stone-500 font-bold uppercase">Total Entries</p>
@@ -199,7 +214,6 @@ export default function Godaam() {
         </div>
       </div>
 
-      {/* Item-wise Khulasa */}
       {itemBreakdownList.length > 0 && (
         <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
           <h4 className="text-[10px] font-bold text-stone-600 uppercase mb-2">📦 Item Wise Khulasa</h4>
@@ -217,7 +231,6 @@ export default function Godaam() {
         </div>
       )}
 
-      {/* Entry Form Toggle */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -305,7 +318,6 @@ export default function Godaam() {
         )}
       </div>
 
-      {/* Stock History List */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Mawjooda Stock History</h3>
