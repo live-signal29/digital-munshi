@@ -7,12 +7,10 @@ export default function KisaanDetail() {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Modals / Edit States
   const [isEditingKisaan, setIsEditingKisaan] = useState(false);
   const [kisaanEditForm, setKisaanEditForm] = useState({ name: '', zameen_acre: '' });
   const [editingEntryId, setEditingEntryId] = useState(null);
 
-  // New Entry Form State
   const [form, setForm] = useState({
     type: 'kharch',
     item_name: '',
@@ -35,7 +33,12 @@ export default function KisaanDetail() {
   }, [selectedKisaanId]);
 
   async function fetchKisaans() {
-    const { data, error } = await supabase.from('kisaans').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('kisaans')
+      .select('*')
+      .eq('category', 'kisaan')
+      .order('created_at', { ascending: false });
+
     if (error) {
       console.error('Fetch Kisaans Error:', error);
       alert('Error loading kisaans: ' + error.message);
@@ -44,6 +47,9 @@ export default function KisaanDetail() {
     if (data && data.length > 0) {
       setKisaans(data);
       if (!selectedKisaanId) setSelectedKisaanId(data[0].id);
+    } else {
+      setKisaans([]);
+      setSelectedKisaanId('');
     }
   }
 
@@ -64,10 +70,8 @@ export default function KisaanDetail() {
     setLoading(false);
   }
 
-  // Selected Kisaan Data
   const selectedKisaan = kisaans.find((k) => k.id === selectedKisaanId);
 
-  // Add or Update Khata Entry
   async function handleSaveEntry(e) {
     e.preventDefault();
     if (!selectedKisaanId) return alert('Pehle Kisaan select karein');
@@ -79,7 +83,6 @@ export default function KisaanDetail() {
     const total = qty * rate;
 
     if (editingEntryId) {
-      // Edit Entry
       const { error } = await supabase
         .from('kisaan_items')
         .update({
@@ -102,7 +105,6 @@ export default function KisaanDetail() {
       resetForm();
       fetchEntries(selectedKisaanId);
     } else {
-      // New Entry
       const { error } = await supabase.from('kisaan_items').insert([
         {
           kisaan_id: selectedKisaanId,
@@ -130,7 +132,6 @@ export default function KisaanDetail() {
     setForm({ type: 'kharch', item_name: '', unit: 'Bori', custom_unit: '', quantity: '', rate: '' });
   }
 
-  // Edit Entry Trigger
   function handleEditEntry(item) {
     setEditingEntryId(item.id);
     const isStandardUnit = ['Bori', 'Liter', 'Acre', 'Ghanti', 'Kg'].includes(item.unit);
@@ -144,7 +145,6 @@ export default function KisaanDetail() {
     });
   }
 
-  // Delete Entry
   async function handleDeleteEntry(id) {
     if (window.confirm('Kya aap is entry ko delete karna chahte hain?')) {
       const { error } = await supabase.from('kisaan_items').delete().eq('id', id);
@@ -157,7 +157,6 @@ export default function KisaanDetail() {
     }
   }
 
-  // Update Kisaan Profile
   async function handleUpdateKisaan(e) {
     e.preventDefault();
     const { error } = await supabase
@@ -182,7 +181,6 @@ export default function KisaanDetail() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Top Kisaan Selector & Add Button */}
       <div className="flex gap-2 items-center">
         <select
           value={selectedKisaanId}
@@ -198,11 +196,9 @@ export default function KisaanDetail() {
         </select>
       </div>
 
-      {/* Selected Kisaan Card */}
       {selectedKisaan && (
         <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-2">
           {isEditingKisaan ? (
-            /* Kisaan Profile Edit Form */
             <form onSubmit={handleUpdateKisaan} className="space-y-2 pt-1">
               <input
                 type="text"
@@ -233,7 +229,6 @@ export default function KisaanDetail() {
               </div>
             </form>
           ) : (
-            /* Kisaan Info Display */
             <div>
               <div className="flex justify-between items-start">
                 <div>
@@ -265,7 +260,6 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Entry Form (Add & Edit) */}
       <form onSubmit={handleSaveEntry} className="bg-white p-4 rounded-2xl border border-stone-200 space-y-3 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -311,7 +305,6 @@ export default function KisaanDetail() {
           </select>
         </div>
 
-        {/* Custom Unit Field */}
         {form.unit === 'Custom' && (
           <input
             type="text"
@@ -347,7 +340,6 @@ export default function KisaanDetail() {
         </button>
       </form>
 
-      {/* Khata Entries List with EDIT & DELETE */}
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-stone-700">Khata Entries</h3>
 
@@ -368,7 +360,6 @@ export default function KisaanDetail() {
                 <p className="text-[11px] text-stone-500">
                   {item.quantity} {item.unit} × Rs {item.rate}
                 </p>
-                {/* Actions */}
                 <div className="flex gap-3 pt-1">
                   <button
                     onClick={() => handleEditEntry(item)}
