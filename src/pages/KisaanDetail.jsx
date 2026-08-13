@@ -53,9 +53,10 @@ export default function KisaanDetail() {
       alert('Error loading kisaans: ' + error.message);
       return;
     }
+    
     if (data && data.length > 0) {
       setKisaans(data);
-      if (!selectedKisaanId) setSelectedKisaanId(data[0].id);
+      setSelectedKisaanId((prev) => prev || data[0].id);
     } else {
       setKisaans([]);
       setSelectedKisaanId('');
@@ -83,14 +84,16 @@ export default function KisaanDetail() {
 
   async function handleAddKisaan(e) {
     e.preventDefault();
-    if (!newKisaanForm.name) return alert('Kisaan ka naam likhna zaroori hai');
+    if (!newKisaanForm.name.trim()) return alert('Kisaan ka naam likhna zaroori hai');
+
+    const acreValue = parseFloat(newKisaanForm.zameen_acre) || 0;
 
     const { data, error } = await supabase
       .from('kisaans')
       .insert([
         {
-          name: newKisaanForm.name,
-          zameen_acre: newKisaanForm.zameen_acre || 0,
+          name: newKisaanForm.name.trim(),
+          zameen_acre: acreValue,
           category: 'kisaan',
         },
       ])
@@ -111,24 +114,26 @@ export default function KisaanDetail() {
   async function handleSaveEntry(e) {
     e.preventDefault();
     if (!selectedKisaanId) return alert('Pehle Kisaan select karein');
-    if (!form.item_name) return alert('Item name likhna zaroori hai');
+    if (!form.item_name.trim()) return alert('Item name likhna zaroori hai');
 
-    const finalUnit = form.unit === 'Custom' ? form.custom_unit || 'Unit' : form.unit;
-    const qty = parseFloat(form.quantity || 0);
-    const rate = parseFloat(form.rate || 0);
+    const finalUnit = form.unit === 'Custom' ? form.custom_unit.trim() || 'Unit' : form.unit;
+    const qty = parseFloat(form.quantity) || 0;
+    const rate = parseFloat(form.rate) || 0;
     const total = qty * rate;
+
+    const entryData = {
+      item_name: form.item_name.trim(),
+      unit: finalUnit,
+      quantity: qty,
+      rate: rate,
+      total_amount: total,
+      type: form.type,
+    };
 
     if (editingEntryId) {
       const { error } = await supabase
         .from('kisaan_items')
-        .update({
-          item_name: form.item_name,
-          unit: finalUnit,
-          quantity: qty,
-          rate: rate,
-          total_amount: total,
-          type: form.type,
-        })
+        .update(entryData)
         .eq('id', editingEntryId);
 
       if (error) {
@@ -145,12 +150,7 @@ export default function KisaanDetail() {
       const { error } = await supabase.from('kisaan_items').insert([
         {
           kisaan_id: selectedKisaanId,
-          item_name: form.item_name,
-          unit: finalUnit,
-          quantity: qty,
-          rate: rate,
-          total_amount: total,
-          type: form.type,
+          ...entryData,
         },
       ]);
 
@@ -176,11 +176,11 @@ export default function KisaanDetail() {
     const isStandardUnit = ['Bori', 'Liter', 'Acre', 'Ghanti', 'Kg'].includes(item.unit);
     setForm({
       type: item.type || 'kharch',
-      item_name: item.item_name,
+      item_name: item.item_name || '',
       unit: isStandardUnit ? item.unit : 'Custom',
-      custom_unit: isStandardUnit ? '' : item.unit,
-      quantity: item.quantity,
-      rate: item.rate,
+      custom_unit: isStandardUnit ? '' : item.unit || '',
+      quantity: item.quantity ?? '',
+      rate: item.rate ?? '',
     });
   }
 
@@ -198,11 +198,13 @@ export default function KisaanDetail() {
 
   async function handleUpdateKisaan(e) {
     e.preventDefault();
+    const acreValue = parseFloat(kisaanEditForm.zameen_acre) || 0;
+
     const { error } = await supabase
       .from('kisaans')
       .update({
-        name: kisaanEditForm.name,
-        zameen_acre: kisaanEditForm.zameen_acre,
+        name: kisaanEditForm.name.trim(),
+        zameen_acre: acreValue,
       })
       .eq('id', selectedKisaanId);
 
@@ -226,7 +228,6 @@ export default function KisaanDetail() {
 
   const netBalance = totalAamdani - totalKharch;
 
-  // Har item ka alag breakdown (DAP, SSP, Urea, Spray, Zinc, Beej, Tractor waghera)
   const itemBreakdown = {};
   entries.forEach((e) => {
     const key = (e.item_name || 'Ather').trim().toUpperCase();
@@ -236,6 +237,7 @@ export default function KisaanDetail() {
     itemBreakdown[key].quantity += Number(e.quantity || 0);
     itemBreakdown[key].amount += Number(e.total_amount || 0);
   });
+  
   const itemBreakdownList = Object.keys(itemBreakdown).map((name) => ({
     name,
     ...itemBreakdown[name],
@@ -318,7 +320,8 @@ export default function KisaanDetail() {
               className="w-full p-2.5 text-xs border border-stone-300 rounded-xl focus:outline-none"
             />
             <input
-              type="text"
+              type="number"
+              step="any"
               placeholder="Zameen Acre (optional)"
               value={newKisaanForm.zameen_acre}
               onChange={(e) => setNewKisaanForm({ ...newKisaanForm, zameen_acre: e.target.value })}
@@ -364,7 +367,8 @@ export default function KisaanDetail() {
                 required
               />
               <input
-                type="text"
+                type="number"
+                step="any"
                 value={kisaanEditForm.zameen_acre}
                 onChange={(e) => setKisaanEditForm({ ...kisaanEditForm, zameen_acre: e.target.value })}
                 placeholder="Zameen Acre"
@@ -395,7 +399,7 @@ export default function KisaanDetail() {
                     <button
                       onClick={() => {
                         setIsEditingKisaan(true);
-                        setKisaanEditForm({ name: selectedKisaan.name, zameen_acre: selectedKisaan.zameen_acre });
+                        setKisaanEditForm({ name: selectedKisaan.name, zameen_acre: selectedKisaan.zameen_acre || '' });
                       }}
                       className="text-xs bg-emerald-800 hover:bg-emerald-700 p-1 rounded-md text-amber-300"
                       title="Edit Kisaan"
@@ -439,7 +443,7 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Mini Dashboard - Item Wise Breakdown (DAP, SSP, Urea, Spray, Zinc, Beej, Tractor waghera) */}
+      {/* Mini Dashboard - Item Wise Breakdown */}
       {selectedKisaan && itemBreakdownList.length > 0 && (
         <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
           <h4 className="text-[10px] font-bold text-stone-600 uppercase mb-2">📦 Item Wise Khulasa</h4>
@@ -464,7 +468,7 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Nayi Entry Add Karein - Toggle */}
+      {/* Entry Form */}
       <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
         <div className="flex justify-between items-center">
           <h3 className="font-bold text-xs text-[#1e3a29]">
@@ -535,6 +539,7 @@ export default function KisaanDetail() {
             <div className="grid grid-cols-2 gap-2">
               <input
                 type="number"
+                step="any"
                 placeholder="Quantity"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
@@ -542,6 +547,7 @@ export default function KisaanDetail() {
               />
               <input
                 type="number"
+                step="any"
                 placeholder="Rate/Unit"
                 value={form.rate}
                 onChange={(e) => setForm({ ...form, rate: e.target.value })}
@@ -559,12 +565,12 @@ export default function KisaanDetail() {
         )}
       </div>
 
-      {/* Khata Entries List with Hide Toggle + Export */}
+      {/* Khata Entries List */}
       <div className="space-y-2">
         <div className="flex justify-between items-center flex-wrap gap-2">
           <h3 className="text-xs font-bold text-stone-700">Khata Entries</h3>
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1 text-[10px] text-stone-600 font-medium">
+            <label className="flex items-center gap-1 text-[10px] text-stone-600 font-medium cursor-pointer">
               <input
                 type="checkbox"
                 checked={hideEntries}
@@ -621,7 +627,7 @@ export default function KisaanDetail() {
 
                   <div className="text-right">
                     <p className={`font-bold text-sm ${item.type === 'aamdani' ? 'text-emerald-700' : 'text-stone-800'}`}>
-                      Rs {Number(item.total_amount).toLocaleString()}
+                      Rs {Number(item.total_amount || 0).toLocaleString()}
                     </p>
                   </div>
                 </div>
