@@ -24,9 +24,18 @@ export default function Zameendar() {
 
   async function fetchKisaans() {
     setLoading(true);
+
+    // 🔑 Get logged-in user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('kisaans')
       .select('*')
+      .eq('user_id', user.id) // 👈 Filter by user_id
       .eq('category', 'zameendar')
       .order('created_at', { ascending: false });
 
@@ -42,6 +51,10 @@ export default function Zameendar() {
     e.preventDefault();
     if (!form.name.trim()) return alert("Zameendar / Kisaan ka naam likhna zaroori hai");
 
+    // 🔑 Get logged-in user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return alert("User session nahi mila, dobara login karein.");
+
     const payload = {
       name: form.name.trim(),
       phone: form.phone.trim() || '',
@@ -49,11 +62,17 @@ export default function Zameendar() {
       kharcha_type: form.kharcha_type,
       amount: form.amount ? parseFloat(form.amount) : 0,
       notes: form.notes.trim() || '',
-      category: 'zameendar'
+      category: 'zameendar',
+      user_id: user.id // 👈 Attach user_id
     };
 
     if (editingId) {
-      const { error } = await supabase.from('kisaans').update(payload).eq('id', editingId);
+      const { error } = await supabase
+        .from('kisaans')
+        .update(payload)
+        .eq('id', editingId)
+        .eq('user_id', user.id); // 👈 Extra safety check
+
       if (!error) {
         setEditingId(null);
         resetForm();
@@ -93,7 +112,15 @@ export default function Zameendar() {
 
   async function handleDelete(id) {
     if (window.confirm("Kya aap is entry ko delete karna chahte hain?")) {
-      const { error } = await supabase.from('kisaans').delete().eq('id', id);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('kisaans')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id); // 👈 Secure delete
+
       if (!error) fetchKisaans();
       else alert("Error deleting: " + error.message);
     }
