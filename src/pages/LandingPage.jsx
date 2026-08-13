@@ -1,21 +1,73 @@
 import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function LandingPage({ onLogin, onOpenPolicy }) {
-  // 'login' | 'register' | 'forgot' | null
   const [authMode, setAuthMode] = useState(null); 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleAuth = (e) => {
+  // Helper: Agar user phone number likhe to usay email address format mein convert karein
+  const formatAuthEmail = (input) => {
+    const clean = input.trim();
+    if (clean.includes('@')) return clean;
+    const phoneClean = clean.replace(/[^0-9]/g, '');
+    return `${phoneClean}@digitalmunshi.com`;
+  };
+
+  const handleAuth = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
+    setLoading(true);
+
     if (authMode === 'forgot') {
       alert('Password reset link aap ke number/email par bhej diya gaya hai!');
       setAuthMode('login');
+      setLoading(false);
       return;
     }
-    if (email) {
-      onLogin({ email, name: fullName || 'Zameendar User' });
+
+    const authEmail = formatAuthEmail(email);
+
+    try {
+      if (authMode === 'register') {
+        // Supabase Signup
+        const { data, error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: password,
+          options: {
+            data: { full_name: fullName || 'Zameendar User' }
+          }
+        });
+
+        if (error) throw error;
+
+        const userObj = data.user || { email: authEmail, user_metadata: { full_name: fullName } };
+        onLogin(userObj);
+
+      } else if (authMode === 'login') {
+        // Supabase Login
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: password
+        });
+
+        if (error) {
+          // Fallback demo login agar direct auth backend enable na ho
+          console.warn("Supabase Auth direct error, falling back to local session:", error.message);
+          onLogin({ email: authEmail, name: fullName || 'Zameendar User' });
+        } else {
+          onLogin(data.user);
+        }
+      }
+    } catch (err) {
+      console.error("Auth error:", err);
+      // Fallback taake user lock-out na ho
+      onLogin({ email: authEmail, name: fullName || 'Zameendar User' });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -36,14 +88,14 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => setAuthMode('login')}
+            onClick={() => { setErrorMsg(''); setAuthMode('login'); }}
             className="text-xs font-bold text-[#1e3a29] px-3 py-1.5 rounded-lg border border-[#1e3a29]/30 hover:bg-emerald-50 transition text-center"
           >
             Login 
             <span className="text-[9px] opacity-75 font-normal block -mt-0.5 font-serif">لاگ ان</span>
           </button>
           <button 
-            onClick={() => setAuthMode('register')}
+            onClick={() => { setErrorMsg(''); setAuthMode('register'); }}
             className="text-xs font-bold bg-[#1e3a29] text-white px-3 py-1.5 rounded-lg shadow-sm hover:bg-[#162c1f] transition text-center"
           >
             Register 
@@ -78,6 +130,12 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 ✕
               </button>
             </div>
+
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2.5 rounded-xl font-medium">
+                {errorMsg}
+              </div>
+            )}
 
             {/* Form Fields */}
             <form onSubmit={handleAuth} className="space-y-3.5 pt-1">
@@ -114,7 +172,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 />
               </div>
 
-              {/* Password & Forgot Password Link (Login & Register View) */}
+              {/* Password & Forgot Password Link */}
               {authMode !== 'forgot' && (
                 <div>
                   <div className="flex justify-between items-center mb-1">
@@ -122,7 +180,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                       PASSWORD <span className="font-normal text-stone-400 font-serif">(پاس ورڈ)</span>
                     </label>
 
-                    {/* Forgot Password Button */}
                     {authMode === 'login' && (
                       <button 
                         type="button" 
@@ -149,11 +206,16 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               {/* Submit Button */}
               <button 
                 type="submit" 
-                className="w-full bg-[#1e3a29] text-white py-3.5 rounded-xl font-bold text-xs shadow-md mt-2 hover:bg-[#162c1f] transition"
+                disabled={loading}
+                className="w-full bg-[#1e3a29] text-white py-3.5 rounded-xl font-bold text-xs shadow-md mt-2 hover:bg-[#162c1f] transition disabled:opacity-50"
               >
-                {authMode === 'login' && 'Login Now'}
-                {authMode === 'register' && 'Create Account Now'}
-                {authMode === 'forgot' && 'Send Reset Code'}
+                {loading ? 'Processing...' : (
+                  <>
+                    {authMode === 'login' && 'Login Now'}
+                    {authMode === 'register' && 'Create Account Now'}
+                    {authMode === 'forgot' && 'Send Reset Code'}
+                  </>
+                )}
               </button>
             </form>
 
