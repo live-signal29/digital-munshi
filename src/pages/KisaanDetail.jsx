@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 export default function KisaanDetail() {
   const [kisaans, setKisaans] = useState([]);
@@ -237,17 +234,25 @@ export default function KisaanDetail() {
     itemBreakdown[key].quantity += Number(e.quantity || 0);
     itemBreakdown[key].amount += Number(e.total_amount || 0);
   });
-  
+
   const itemBreakdownList = Object.keys(itemBreakdown).map((name) => ({
     name,
     ...itemBreakdown[name],
   }));
 
+  // Direct CSV Export (Opens natively in Excel without needing external 'xlsx' library)
   function exportToCSV() {
     if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
     const headers = ['Item Name', 'Type', 'Quantity', 'Unit', 'Rate', 'Total Amount'];
-    const rows = entries.map((e) => [e.item_name, e.type, e.quantity, e.unit, e.rate, e.total_amount]);
-    const csvContent = headers.join(',') + '\n' + rows.map((r) => r.join(',')).join('\n');
+    const rows = entries.map((e) => [
+      `"${e.item_name}"`,
+      e.type,
+      e.quantity,
+      `"${e.unit}"`,
+      e.rate,
+      e.total_amount
+    ]);
+    const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.map((r) => r.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -256,42 +261,6 @@ export default function KisaanDetail() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  }
-
-  function exportToExcel() {
-    if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
-    const wsData = entries.map((e) => ({
-      'Item Name': e.item_name,
-      Type: e.type,
-      Quantity: e.quantity,
-      Unit: e.unit,
-      Rate: e.rate,
-      'Total Amount': e.total_amount,
-    }));
-    const ws = XLSX.utils.json_to_sheet(wsData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Entries');
-    XLSX.writeFile(wb, `${selectedKisaan?.name || 'kisaan'}_entries.xlsx`);
-  }
-
-  function exportToPDF() {
-    if (!entries.length) return alert('Koi entry nahi hai export karne ke liye');
-    const doc = new jsPDF();
-    doc.setFontSize(14);
-    doc.text(`${selectedKisaan?.name || 'Kisaan'} - Khata Entries`, 14, 15);
-    autoTable(doc, {
-      startY: 20,
-      head: [['Item', 'Type', 'Qty', 'Unit', 'Rate', 'Total']],
-      body: entries.map((e) => [
-        e.item_name,
-        e.type,
-        e.quantity,
-        e.unit,
-        e.rate,
-        `Rs ${Number(e.total_amount).toLocaleString()}`,
-      ]),
-    });
-    doc.save(`${selectedKisaan?.name || 'kisaan'}_entries.pdf`);
   }
 
   return (
@@ -443,7 +412,7 @@ export default function KisaanDetail() {
         </div>
       )}
 
-      {/* Mini Dashboard - Item Wise Breakdown */}
+      {/* Item Wise Breakdown */}
       {selectedKisaan && itemBreakdownList.length > 0 && (
         <div className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm">
           <h4 className="text-[10px] font-bold text-stone-600 uppercase mb-2">📦 Item Wise Khulasa</h4>
@@ -578,14 +547,8 @@ export default function KisaanDetail() {
               />
               Hide List
             </label>
-            <button onClick={exportToCSV} className="text-[10px] font-bold text-blue-600 hover:underline">
-              📄 CSV
-            </button>
-            <button onClick={exportToExcel} className="text-[10px] font-bold text-green-700 hover:underline">
-              📊 Excel
-            </button>
-            <button onClick={exportToPDF} className="text-[10px] font-bold text-rose-600 hover:underline">
-              🧾 PDF
+            <button onClick={exportToCSV} className="text-[10px] font-bold text-emerald-700 hover:underline">
+              📊 Export to Excel / CSV
             </button>
           </div>
         </div>
