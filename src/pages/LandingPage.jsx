@@ -16,8 +16,10 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const [errorMsg, setErrorMsg] = useState('');
+  const [resetMessage, setResetMessage] = useState('');
 
   /*
    * -----------------------------------------
@@ -32,10 +34,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
   /*
    * -----------------------------------------
    * PAKISTAN PHONE FORMAT
-   *
-   * 03001234567
-   *      ↓
-   * +923001234567
    * -----------------------------------------
    */
 
@@ -176,6 +174,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
       setVerificationCode('');
       setErrorMsg('');
+      setResetMessage('');
 
       return;
     }
@@ -188,10 +187,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
       onLogin(signupData.data.session.user);
       return;
     }
-
-    /*
-     * Safety check
-     */
 
     throw new Error(
       'Account create hua lekin login session nahi bani.'
@@ -210,6 +205,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     if (loading) return;
 
     setErrorMsg('');
+    setResetMessage('');
     setLoading(true);
 
     try {
@@ -289,10 +285,12 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 password
               };
 
-        const { data: loginData, error: loginError } =
-          await supabase.auth.signInWithPassword(
-            loginPayload
-          );
+        const {
+          data: loginData,
+          error: loginError
+        } = await supabase.auth.signInWithPassword(
+          loginPayload
+        );
 
         if (loginError) {
           throw loginError;
@@ -336,6 +334,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     if (resending) return;
 
     setErrorMsg('');
+    setResetMessage('');
     setResending(true);
 
     try {
@@ -375,6 +374,78 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
   /*
    * -----------------------------------------
+   * FORGOT PASSWORD
+   * -----------------------------------------
+   *
+   * Password recovery currently email based.
+   * User must enter an email address.
+   */
+
+  const handleForgotPassword = async () => {
+    if (resetLoading) return;
+
+    setErrorMsg('');
+    setResetMessage('');
+
+    const contact = email.trim().toLowerCase();
+
+    if (!contact) {
+      setErrorMsg(
+        'Pehle apna email address enter karein.'
+      );
+      return;
+    }
+
+    if (!isEmail(contact)) {
+      setErrorMsg(
+        'Password reset ke liye email address enter karein. Example: example@gmail.com'
+      );
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      /*
+       * Same website/domain par reset page open hoga.
+       *
+       * App.jsx PASSWORD_RECOVERY event detect karega
+       * aur New Password screen show karega.
+       */
+
+      const { error } =
+        await supabase.auth.resetPasswordForEmail(
+          contact,
+          {
+            redirectTo: window.location.origin
+          }
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      setResetMessage(
+        'Password reset link aapke Gmail par bhej diya gaya hai. Gmail check karein.'
+      );
+
+    } catch (err) {
+      console.error(
+        'Forgot password error:',
+        err
+      );
+
+      setErrorMsg(
+        err?.message ||
+          'Password reset email nahi bheja ja saka. Dobara try karein.'
+      );
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  /*
+   * -----------------------------------------
    * LOGIN
    * -----------------------------------------
    */
@@ -393,17 +464,19 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     let loginData;
 
     if (isEmail(email.trim())) {
-      loginData = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password
-      });
+      loginData =
+        await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password
+        });
     } else {
       const phoneNumber = formatPhone(email);
 
-      loginData = await supabase.auth.signInWithPassword({
-        phone: phoneNumber,
-        password
-      });
+      loginData =
+        await supabase.auth.signInWithPassword({
+          phone: phoneNumber,
+          password
+        });
     }
 
     if (loginData.error) {
@@ -435,6 +508,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     if (loading) return;
 
     setErrorMsg('');
+    setResetMessage('');
     setLoading(true);
 
     try {
@@ -449,7 +523,10 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
       }
 
     } catch (err) {
-      console.error('Authentication error:', err);
+      console.error(
+        'Authentication error:',
+        err
+      );
 
       let message =
         err?.message ||
@@ -530,11 +607,9 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               </h2>
 
               <p className="text-sm text-stone-600 mt-2 leading-relaxed">
-
                 {verificationMode === 'email'
                   ? 'Aap ke email par 6 digit verification code bheja gaya hai.'
                   : 'Aap ke mobile number par 6 digit verification code bheja gaya hai.'}
-
               </p>
 
               <p className="text-xs font-semibold text-[#1e3a29] mt-2 break-all">
@@ -619,6 +694,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 setAuthMode('register');
                 setVerificationCode('');
                 setErrorMsg('');
+                setResetMessage('');
               }}
               className="w-full mt-5 pt-4 border-t border-stone-100 text-xs text-stone-500 hover:text-[#1e3a29]"
             >
@@ -675,7 +751,9 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
           <button
             onClick={() => {
               setErrorMsg('');
+              setResetMessage('');
               setPassword('');
+              setEmail('');
               setAuthMode('login');
             }}
             className="text-xs font-bold text-[#1e3a29] px-3 py-1.5 rounded-lg border border-[#1e3a29]/30 hover:bg-emerald-50 transition text-center"
@@ -691,6 +769,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
           <button
             onClick={() => {
               setErrorMsg('');
+              setResetMessage('');
               setPassword('');
               setFullName('');
               setEmail('');
@@ -744,6 +823,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 onClick={() => {
                   setAuthMode(null);
                   setErrorMsg('');
+                  setResetMessage('');
                 }}
                 className="text-stone-400 hover:text-stone-600 text-sm font-bold"
               >
@@ -755,6 +835,12 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             {errorMsg && (
               <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2.5 rounded-xl font-medium">
                 {errorMsg}
+              </div>
+            )}
+
+            {resetMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-2.5 rounded-xl font-medium">
+                {resetMessage}
               </div>
             )}
 
@@ -845,9 +931,13 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                   {authMode === 'login' && (
                     <button
                       type="button"
-                      className="text-[10px] text-emerald-800 font-semibold hover:underline"
+                      onClick={handleForgotPassword}
+                      disabled={resetLoading}
+                      className="text-[10px] text-emerald-800 font-semibold hover:underline disabled:opacity-50"
                     >
-                      Forgot Password?
+                      {resetLoading
+                        ? 'Sending...'
+                        : 'Forgot Password?'}
                     </button>
                   )}
 
@@ -942,6 +1032,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                     type="button"
                     onClick={() => {
                       setErrorMsg('');
+                      setResetMessage('');
                       setPassword('');
                       setFullName('');
                       setEmail('');
@@ -966,6 +1057,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                     type="button"
                     onClick={() => {
                       setErrorMsg('');
+                      setResetMessage('');
                       setPassword('');
                       setAuthMode('login');
                     }}
@@ -997,6 +1089,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             </span>
 
             <h2 className="text-2xl md:text-3xl font-serif font-bold text-stone-900 leading-snug">
+
               Poori Zameendari Ka Hisaab,
               <br />
 
@@ -1020,6 +1113,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               <button
                 onClick={() => {
                   setErrorMsg('');
+                  setResetMessage('');
                   setAuthMode('register');
                 }}
                 className="w-full bg-[#1e3a29] text-white py-3 rounded-xl font-bold text-xs shadow-lg flex items-center justify-center gap-2 hover:bg-[#162c1f]"
@@ -1036,6 +1130,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
               <button
                 onClick={() => {
                   setErrorMsg('');
+                  setResetMessage('');
                   setAuthMode('login');
                 }}
                 className="w-full bg-white border border-stone-300 text-stone-700 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm"
@@ -1064,6 +1159,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             <div className="grid grid-cols-2 gap-2.5">
 
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
+
                 <div className="text-emerald-800 text-lg">
                   🚜
                 </div>
@@ -1075,9 +1171,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 <p className="text-[10px] text-stone-500 leading-tight">
                   DAP, Spray, Beej, aur Paidawar ka item-wise record.
                 </p>
+
               </div>
 
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
+
                 <div className="text-emerald-800 text-lg">
                   🏪
                 </div>
@@ -1089,9 +1187,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 <p className="text-[10px] text-stone-500 leading-tight">
                   Godaam ka complete stock record.
                 </p>
+
               </div>
 
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
+
                 <div className="text-emerald-800 text-lg">
                   🔒
                 </div>
@@ -1103,9 +1203,11 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 <p className="text-[10px] text-stone-500 leading-tight">
                   Cash In aur Cash Out ka complete hisaab.
                 </p>
+
               </div>
 
               <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-sm">
+
                 <div className="text-emerald-800 text-lg">
                   📜
                 </div>
@@ -1117,6 +1219,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                 <p className="text-[10px] text-stone-500 leading-tight">
                   Data cloud database par safe.
                 </p>
+
               </div>
 
             </div>
