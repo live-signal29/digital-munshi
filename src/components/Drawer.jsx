@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
 
+// Apne Telegram Bot Credentials
+const TELEGRAM_BOT_TOKEN = '8750873616:AAHd0nbC3olWzOo3yop7--NRSV-Oz6kFiDw';
+const TELEGRAM_CHAT_ID = '8673031677';
+
 export default function Drawer({
   isOpen,
   toggleDrawer,
@@ -78,8 +82,6 @@ export default function Drawer({
     setSuccessMsg('');
 
     try {
-      // Note: App.jsx level par supabase.auth.updateUser method integration ki ja sakti hai
-      // Yahan metadata update payload construct kiya gaya hai.
       setSuccessMsg('Naam successfully update ho gaya!');
       setTimeout(() => {
         setIsEditNameOpen(false);
@@ -94,7 +96,7 @@ export default function Drawer({
 
   /*
    * -----------------------------------------
-   * EMAIL CHANGE REQUEST HANDLER
+   * EMAIL CHANGE REQUEST HANDLER (TELEGRAM INTEGRATED)
    * -----------------------------------------
    */
   const handleEmailRequest = async (e) => {
@@ -106,8 +108,39 @@ export default function Drawer({
     setSuccessMsg('');
 
     try {
-      // Request simulation / Supabase support entry
+      // 1. Telegram Notification Message Payload
+      const telegramMessage = 
+`🌾 *DIGITAL MUNSHI - EMAIL CHANGE REQUEST* 🚨
+
+👤 *User Name:* ${fullName}
+🆔 *User ID:* \`${user?.id || 'N/A'}\`
+
+✉️ *Current Email:* ${oldContact}
+🆕 *Requested Email:* ${newContact}
+📝 *Reason:* ${requestReason || 'Koi reason nahi di'}
+
+📅 *Date & Time:* ${new Date().toLocaleString('en-PK')}`;
+
+      // 2. Telegram Bot Direct API Call
+      const tgResponse = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: TELEGRAM_CHAT_ID,
+            text: telegramMessage,
+            parse_mode: 'Markdown'
+          })
+        }
+      );
+
+      if (!tgResponse.ok) {
+        throw new Error('Telegram notification sending failed.');
+      }
+
       setSuccessMsg('Request bhej di gayi hai! Admin jald aap se rabta karega.');
+
       setTimeout(() => {
         setIsRequestEmailOpen(false);
         setSuccessMsg('');
@@ -115,7 +148,9 @@ export default function Drawer({
         setNewContact('');
         setRequestReason('');
       }, 2000);
+
     } catch (err) {
+      console.error('Request submission error:', err);
       setErrorMsg('Request bhejne me masla hua. Dobara try karein.');
     } finally {
       setIsSubmitting(false);
