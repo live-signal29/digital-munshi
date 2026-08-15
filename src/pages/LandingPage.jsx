@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function LandingPage({ onLogin, onOpenPolicy }) {
-  const [authMode, setAuthMode] = useState(null);
+  const [authMode, setAuthMode] = useState(null); // 'login', 'register', or 'forgot'
   const [verificationMode, setVerificationMode] = useState(null);
 
   const [email, setEmail] = useState('');
@@ -267,13 +267,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
       }
 
       if (!sessionData?.session?.user) {
-        /*
-         * Kuch Supabase configurations mein verify ke baad
-         * session automatically nahi banti.
-         *
-         * Isliye password ke saath actual login karte hain.
-         */
-
         const loginPayload =
           verificationMode === 'email'
             ? {
@@ -305,10 +298,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
         onLogin(loginData.session.user);
         return;
       }
-
-      /*
-       * Real Supabase session
-       */
 
       onLogin(sessionData.session.user);
 
@@ -374,14 +363,13 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
   /*
    * -----------------------------------------
-   * FORGOT PASSWORD
+   * FORGOT PASSWORD REQUEST
    * -----------------------------------------
-   *
-   * Password recovery currently email based.
-   * User must enter an email address.
    */
 
-  const handleForgotPassword = async () => {
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+
     if (resetLoading) return;
 
     setErrorMsg('');
@@ -390,50 +378,35 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
     const contact = email.trim().toLowerCase();
 
     if (!contact) {
-      setErrorMsg(
-        'Pehle apna email address enter karein.'
-      );
+      setErrorMsg('Aapna email address enter karein.');
       return;
     }
 
     if (!isEmail(contact)) {
-      setErrorMsg(
-        'Password reset ke liye email address enter karein. Example: example@gmail.com'
-      );
+      setErrorMsg('Password reset ke liye valid Email address enter karein.');
       return;
     }
 
     setResetLoading(true);
 
     try {
-      /*
-       * Same website/domain par reset page open hoga.
-       *
-       * App.jsx PASSWORD_RECOVERY event detect karega
-       * aur New Password screen show karega.
-       */
-
-      const { error } =
-        await supabase.auth.resetPasswordForEmail(
-          contact,
-          {
-            redirectTo: window.location.origin
-          }
-        );
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        contact,
+        {
+          redirectTo: window.location.origin
+        }
+      );
 
       if (error) {
         throw error;
       }
 
       setResetMessage(
-        'Password reset link aapke Gmail par bhej diya gaya hai. Gmail check karein.'
+        'Password reset link aapke Gmail par bhej diya gaya hai. Kripya apna Inbox check karein.'
       );
 
     } catch (err) {
-      console.error(
-        'Forgot password error:',
-        err
-      );
+      console.error('Forgot password error:', err);
 
       setErrorMsg(
         err?.message ||
@@ -489,10 +462,6 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
       );
     }
 
-    /*
-     * ONLY REAL SUPABASE USER
-     */
-
     onLogin(loginData.data.session.user);
   };
 
@@ -523,10 +492,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
       }
 
     } catch (err) {
-      console.error(
-        'Authentication error:',
-        err
-      );
+      console.error('Authentication error:', err);
 
       let message =
         err?.message ||
@@ -534,25 +500,16 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
       const lower = message.toLowerCase();
 
-      if (
-        lower.includes('invalid login credentials')
-      ) {
-        message =
-          'Mobile/Email ya Password ghalat hai.';
+      if (lower.includes('invalid login credentials')) {
+        message = 'Mobile/Email ya Password ghalat hai.';
       }
 
-      if (
-        lower.includes('user already registered')
-      ) {
-        message =
-          'Ye account pehle se registered hai. Login karein.';
+      if (lower.includes('user already registered')) {
+        message = 'Ye account pehle se registered hai. Login karein.';
       }
 
-      if (
-        lower.includes('password should be at least')
-      ) {
-        message =
-          'Password kam az kam 6 characters ka hona chahiye.';
+      if (lower.includes('password should be at least')) {
+        message = 'Password kam az kam 6 characters ka hona chahiye.';
       }
 
       setErrorMsg(message);
@@ -789,10 +746,102 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
 
       </header>
 
-      {/* AUTH */}
+      {/* AUTH MODES */}
 
-      {authMode ? (
+      {authMode === 'forgot' ? (
+        
+        /* -----------------------------------------
+         * DEDICATED FORGOT PASSWORD SCREEN
+         * ----------------------------------------- */
+        <div className="my-auto py-4">
+          <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-xl space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <div>
+                <h3 className="text-lg font-serif font-bold text-[#1e3a29]">
+                  Reset Your Password
+                </h3>
+                <p className="text-[11px] text-stone-500 font-serif">
+                  پاس ورڈ دوبارہ حاصل کریں
+                </p>
+              </div>
 
+              <button
+                onClick={() => {
+                  setAuthMode('login');
+                  setErrorMsg('');
+                  setResetMessage('');
+                }}
+                className="text-stone-400 hover:text-stone-600 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600 leading-relaxed">
+              Apna registered email address enter karein. Hum aapko password reset karne ka link bhejenge.
+            </p>
+
+            {errorMsg && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs p-2.5 rounded-xl font-medium">
+                {errorMsg}
+              </div>
+            )}
+
+            {resetMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-3 rounded-xl font-medium leading-relaxed">
+                {resetMessage}
+              </div>
+            )}
+
+            {!resetMessage && (
+              <form onSubmit={handleForgotPassword} className="space-y-3.5 pt-1">
+                <div>
+                  <label className="text-[10px] text-stone-600 font-bold block mb-1">
+                    EMAIL ADDRESS
+                    <span className="font-normal text-stone-400 font-serif"> (ای میل)</span>
+                  </label>
+
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="example@gmail.com"
+                    className="w-full p-3 text-xs border border-stone-300 rounded-xl focus:outline-none focus:border-[#1e3a29]"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={resetLoading}
+                  className="w-full bg-[#1e3a29] text-white py-3.5 rounded-xl font-bold text-xs shadow-md mt-2 hover:bg-[#162c1f] transition disabled:opacity-50"
+                >
+                  {resetLoading ? 'Sending Link...' : 'Send Password Reset Link'}
+                </button>
+              </form>
+            )}
+
+            <div className="text-center pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setErrorMsg('');
+                  setResetMessage('');
+                  setAuthMode('login');
+                }}
+                className="text-xs font-bold text-[#1e3a29] hover:underline"
+              >
+                ← Back to Login
+              </button>
+            </div>
+          </div>
+        </div>
+
+      ) : authMode ? (
+
+        /* -----------------------------------------
+         * LOGIN & REGISTER MODAL
+         * ----------------------------------------- */
         <div className="my-auto py-4">
 
           <div className="bg-white p-6 rounded-3xl border border-stone-200 shadow-xl space-y-4">
@@ -931,13 +980,14 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
                   {authMode === 'login' && (
                     <button
                       type="button"
-                      onClick={handleForgotPassword}
-                      disabled={resetLoading}
-                      className="text-[10px] text-emerald-800 font-semibold hover:underline disabled:opacity-50"
+                      onClick={() => {
+                        setErrorMsg('');
+                        setResetMessage('');
+                        setAuthMode('forgot');
+                      }}
+                      className="text-[10px] text-emerald-800 font-semibold hover:underline"
                     >
-                      {resetLoading
-                        ? 'Sending...'
-                        : 'Forgot Password?'}
+                      Forgot Password?
                     </button>
                   )}
 
