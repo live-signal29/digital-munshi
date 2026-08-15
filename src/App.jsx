@@ -37,7 +37,7 @@ export default function App() {
 
   /*
    * -----------------------------------------
-   * PASSWORD RECOVERY
+   * PASSWORD RECOVERY HANDLER
    * -----------------------------------------
    */
 
@@ -97,15 +97,15 @@ export default function App() {
       }
 
       setPasswordMessage(
-        'Password successfully update ho gaya hai.'
+        'Password successfully update ho gaya hai!'
       );
 
       setNewPassword('');
       setConfirmPassword('');
 
       /*
-       * Recovery session ko logout kar ke
-       * normal login screen par bhejenge.
+       * Recovery session clear kar ke
+       * user ko fresh login screen par bhejen
        */
 
       setTimeout(async () => {
@@ -145,6 +145,16 @@ export default function App() {
     let mounted = true;
 
     async function checkUserSession() {
+
+      // Recovery link URL params check
+      const hash = window.location.hash;
+      const isRecoveryURL = hash && hash.includes('type=recovery');
+
+      if (isRecoveryURL) {
+        setPasswordRecovery(true);
+        setLoading(false);
+        return;
+      }
 
       const {
         data: { session }
@@ -210,7 +220,7 @@ export default function App() {
           return;
         }
 
-        if (session?.user) {
+        if (session?.user && !passwordRecovery) {
 
           setUser(session.user);
 
@@ -238,7 +248,7 @@ export default function App() {
       subscription.unsubscribe();
     };
 
-  }, []);
+  }, [passwordRecovery]);
 
   /*
    * -----------------------------------------
@@ -277,7 +287,7 @@ export default function App() {
 
   /*
    * -----------------------------------------
-   * KISAAN
+   * KISAAN SELECT
    * -----------------------------------------
    */
 
@@ -289,7 +299,7 @@ export default function App() {
 
   /*
    * -----------------------------------------
-   * LOADING
+   * LOADING SCREEN
    * -----------------------------------------
    */
 
@@ -334,7 +344,7 @@ export default function App() {
               </div>
 
               <h1 className="mt-4 text-2xl font-serif font-bold text-[#1e3a29]">
-                Reset Password
+                Set New Password
               </h1>
 
               <p className="text-xs text-stone-500 mt-2">
