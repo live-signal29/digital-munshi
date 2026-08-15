@@ -696,7 +696,7 @@ export default function LandingPage({ onLogin, onOpenPolicy }) {
             </h1>
 
             <span className="text-[10px] text-emerald-800 font-medium">
-              Haji Noor Kissan
+              by Aziz
             </span>
 
           </div>
