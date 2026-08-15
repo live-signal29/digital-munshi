@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+Import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
@@ -113,44 +113,17 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      
-      {/* Top Banner with App Head Logo */}
-      <div className="bg-gradient-to-br from-[#1e3a29] to-[#122419] text-white p-4.5 rounded-2xl shadow-md space-y-3 relative overflow-hidden border border-emerald-800/40">
-        
-        {/* Glow effect */}
-        <div className="absolute -right-6 -top-6 w-20 h-20 bg-emerald-500/10 rounded-full blur-xl pointer-events-none"></div>
-
-        {/* Header Logo Badge & Tag */}
-        <div className="flex justify-between items-center border-b border-emerald-800/60 pb-2.5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-emerald-700/80 border border-emerald-400/30 flex items-center justify-center text-lg shadow-inner">
-              🌾
-            </div>
-            <div>
-              <h1 className="text-xs font-bold text-emerald-300 font-serif tracking-wider uppercase leading-none">
-                Digital Munshi
-              </h1>
-              <p className="text-[9px] text-emerald-200/70 font-medium leading-none mt-0.5">
-                Zameendari Khaata App
-              </p>
-            </div>
+      {/* Top Banner */}
+      <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
+        <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+          Overview
+        </span>
+        <div className="flex justify-between items-end mt-1">
+          <div>
+            <h2 className="text-xl font-bold font-serif">Kisan Hisab Dashboard 🌾</h2>
+            <p className="text-xs text-emerald-200">Tamam Khate Aur Stock Ka Khulasa</p>
           </div>
-
-          <span className="text-[9px] bg-emerald-800/80 text-emerald-200 border border-emerald-600/40 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-            Overview
-          </span>
         </div>
-
-        {/* Dashboard Title */}
-        <div>
-          <h2 className="text-lg font-bold font-serif text-white leading-tight">
-            Kisan Hisab Dashboard
-          </h2>
-          <p className="text-xs text-emerald-200/80 mt-0.5">
-            Tamam Khate Aur Stock Ka Khulasa
-          </p>
-        </div>
-
       </div>
 
       {loading ? (
