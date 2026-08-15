@@ -1,4 +1,4 @@
-Import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
@@ -66,7 +66,7 @@ export default function Dashboard() {
         .eq('user_id', user.id);
       if (entriesErr) console.error("Kisaan Items Fetch Error:", entriesErr);
 
-      // Calculate Stock Balance (In from Godaam vs Out via Kisaan Items)
+      // Calculate Stock Balance
       const itemMap = {};
 
       godaam?.forEach(g => {
@@ -113,7 +113,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 max-w-md mx-auto space-y-4">
-      {/* Top Banner */}
+      {/* Clean Top Banner (Original Style) */}
       <div className="bg-[#1e3a29] text-white p-4 rounded-2xl shadow-md space-y-1">
         <span className="text-[9px] bg-emerald-800 text-emerald-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
           Overview
